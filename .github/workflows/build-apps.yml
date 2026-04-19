@@ -150,6 +150,8 @@ jobs:
         with:
           name: frontend-dist
           path: dist/
+      - name: Install Capacitor CLI
+        run: npm install @capacitor/cli @capacitor/android --no-package-lock
 
       - name: Initialize Capacitor (if needed)
         run: |
