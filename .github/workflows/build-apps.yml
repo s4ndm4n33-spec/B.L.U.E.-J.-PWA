@@ -1,16 +1,5 @@
 ###############################################################################
-# B.L.U.E.-J. — Build Desktop + Mobile Installers
-#
-# Triggers: push to main, manual dispatch, or new tag (v*)
-#
-# Outputs (downloadable from Actions → Artifacts, or Releases for tags):
-#   • Windows:  BLUE-J-Setup-x64.exe  (installer)
-#   • Windows:  BLUE-J-Portable.exe   (no install needed)
-#   • Linux:    BLUE-J.AppImage
-#   • Linux:    BLUE-J.deb
-#   • Android:  BLUE-J.apk
-#
-# No local tooling needed. Push code → get installers.
+# B.L.U.E.-J. — Build Desktop + Mobile Installers (Fixed)
 ###############################################################################
 
 name: Build Standalone Apps
@@ -19,9 +8,8 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-  workflow_dispatch:  # Manual trigger from GitHub UI
+  workflow_dispatch:
 
-# Cancel in-progress runs on same branch
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
@@ -30,9 +18,8 @@ env:
   NODE_VERSION: '22'
 
 jobs:
-
   # ─────────────────────────────────────────────────────────
-  # Step 1: Build the Vite frontend (shared by all platforms)
+  # Step 1: Build the Vite frontend
   # ─────────────────────────────────────────────────────────
   build-frontend:
     name: 📦 Build Frontend
@@ -41,10 +28,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: setup Node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          # Cache removed to prevent lockfile error
+
       - name: Install dependencies
         run: npm install --no-package-lock
 
@@ -57,6 +46,7 @@ jobs:
           name: frontend-dist
           path: dist
           retention-days: 7
+
   # ─────────────────────────────────────────────────────────
   # Step 2a: Windows Desktop (.exe)
   # ─────────────────────────────────────────────────────────
@@ -69,11 +59,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock
 
       - name: Download frontend dist
         uses: actions/download-artifact@v4
@@ -106,11 +95,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock
 
       - name: Download frontend dist
         uses: actions/download-artifact@v4
@@ -144,8 +132,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: '22'
 
       - uses: actions/setup-java@v4
         with:
@@ -156,7 +143,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock
 
       - name: Download frontend dist
         uses: actions/download-artifact@v4
@@ -164,11 +151,9 @@ jobs:
           name: frontend-dist
           path: dist/
 
-      # Initialize Capacitor if android/ folder doesn't exist yet
       - name: Initialize Capacitor (if needed)
         run: |
           if [ ! -d "android" ]; then
-            echo "No android/ folder found — initializing Capacitor..."
             npx cap add android
           fi
 
@@ -194,7 +179,7 @@ jobs:
           retention-days: 30
 
   # ─────────────────────────────────────────────────────────
-  # Step 3: Auto-create GitHub Release (on version tags only)
+  # Step 3: Auto-create GitHub Release
   # ─────────────────────────────────────────────────────────
   create-release:
     name: 🚀 Create Release
@@ -222,4 +207,3 @@ jobs:
             artifacts/android-apk/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
