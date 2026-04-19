@@ -2,6 +2,7 @@
   "name": "blue-j-sovereign",
   "version": "1.0.0",
   "private": true,
+  "main": "electron-main.js",
   "type": "module",
   "engines": {
     "node": "22.x"

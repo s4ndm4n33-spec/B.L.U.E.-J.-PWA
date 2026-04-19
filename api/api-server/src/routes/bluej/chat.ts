@@ -1,13 +1,25 @@
 import { Router, type IRouter } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
-import { db } from "@workspace/db";
-import { conversations as conversationsTable, messages as messagesTable, userProgressTable } from "@workspace/db";
-import { ChatWithJBody } from "@workspace/api-zod";
-import { eq } from "drizzle-orm";
+import { getOpenAI, getChatModel, getFastModel, hasApiKey } from "../../lib/ai-client.js";
+import db from "../../lib/mem-store.js";
 import { buildSystemPrompt, buildSafetyCheck } from "./j-personality.js";
 import { CURRICULUM } from "./curriculum.js";
+import { z } from "zod";
 
 const router: IRouter = Router();
+
+const ChatWithJBody = z.object({
+  sessionId: z.string(),
+  message: z.string(),
+  conversationId: z.number().nullable().optional(),
+  language: z.string().default("python"),
+  os: z.string().default("linux"),
+  phaseIndex: z.number().default(0),
+  taskIndex: z.number().default(0),
+  hardwareInfo: z.any().optional(),
+  learnerMode: z.string().optional(),
+  providerMode: z.string().optional(),
+  model: z.string().optional(), // User can override model per-request
+});
 
 const VALID_LEARNER_MODES = new Set(["kids", "teen", "adult-beginner", "advanced"]);
 type LearnerMode = "kids" | "teen" | "adult-beginner" | "advanced";
@@ -75,29 +87,16 @@ interface GauntletResult {
   violations: string[];
 }
 
-async function runCodeGauntlet(
-  code: string,
-  language: string
-): Promise<GauntletResult> {
-  if (!code || code.length < 20) return { passed: true, violations: [] };
+async function runCodeGauntlet(code: string, language: string): Promise<GauntletResult> {
+  if (!code || code.length < 20 || !hasApiKey()) return { passed: true, violations: [] };
 
   const rules = resolveRules(language).join("\n");
-  const prompt = `Audit this ${language} code against ONLY these 5 style rules. Be strict but pragmatic — only flag genuine violations.
-
-RULES:
-${rules}
-
-CODE:
-\`\`\`${language}
-${code}
-\`\`\`
-
-Respond ONLY in valid JSON (no markdown, no explanation):
-{"passed": true|false, "violations": ["specific violation here"]}`;
+  const prompt = `Audit this ${language} code against ONLY these 5 style rules. Be strict but pragmatic — only flag genuine violations.\n\nRULES:\n${rules}\n\nCODE:\n\`\`\`${language}\n${code}\n\`\`\`\n\nRespond ONLY in valid JSON (no markdown, no explanation):\n{"passed": true|false, "violations": ["specific violation here"]}`;
 
   try {
+    const openai = getOpenAI();
     const resp = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: getFastModel(),
       messages: [
         { role: "system", content: "You are a strict code quality auditor. Respond only in raw JSON." },
         { role: "user", content: prompt },
@@ -114,7 +113,6 @@ Respond ONLY in valid JSON (no markdown, no explanation):
       violations: Array.isArray(parsed.violations) ? parsed.violations : [],
     };
   } catch {
-    // Fail-open: audit service errors must never block J. from sending code
     return { passed: true, violations: [] };
   }
 }
@@ -122,8 +120,11 @@ Respond ONLY in valid JSON (no markdown, no explanation):
 async function generateWithGauntlet(
   chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   language: string,
+  requestModel?: string,
   maxRetries = 2
 ): Promise<string> {
+  const openai = getOpenAI();
+  const model = requestModel || getChatModel();
   let attempt = 0;
   let currentMessages = [...chatMessages];
   let lastResponse = "";
@@ -132,7 +133,7 @@ async function generateWithGauntlet(
     attempt++;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5.2",
+      model,
       max_completion_tokens: 8192,
       messages: currentMessages,
       stream: false,
@@ -145,7 +146,6 @@ async function generateWithGauntlet(
     const codeBlocks = extractCodeBlocks(fullResponse);
     if (codeBlocks.length === 0) return fullResponse;
 
-    // Validate ALL code blocks — aggregate violations across every block
     const allViolations: string[] = [];
     for (const block of codeBlocks) {
       const result = await runCodeGauntlet(block.code, block.lang || language);
@@ -154,17 +154,9 @@ async function generateWithGauntlet(
       }
     }
 
-    if (allViolations.length === 0) {
-      return fullResponse;
-    }
+    if (allViolations.length === 0) return fullResponse;
+    if (attempt >= maxRetries) return lastResponse;
 
-    if (attempt >= maxRetries) {
-      // Retries exhausted — send the best available response with code intact.
-      // The gauntlet is a quality advisor; it must never prevent J. from writing code.
-      return lastResponse;
-    }
-
-    // Violations found — re-prompt J. to correct every flagged block
     const fixPrompt = [
       "Your code contains the following best-practice violations across one or more code blocks. Please revise your ENTIRE previous response to correct all of them:",
       "",
@@ -185,14 +177,20 @@ async function generateWithGauntlet(
 
 router.post("/", async (req, res) => {
   try {
+    if (!hasApiKey()) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(`data: ${JSON.stringify({ content: "⚠️ No API key configured. Go to Settings → AI Provider and enter your OpenAI API key (or any OpenAI-compatible endpoint). For offline use, switch to Local AI mode." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      return res.end();
+    }
+
     const body = ChatWithJBody.parse(req.body);
-    const { sessionId, message, language, os, phaseIndex, taskIndex, hardwareInfo } = body;
-
-    // Validated learnerMode (not raw cast)
+    const { sessionId, message, language, os, phaseIndex, taskIndex, hardwareInfo, model } = body;
     const learnerMode = parseLearnerMode(req.body.learnerMode);
-    let conversationId = body.conversationId;
+    let conversationId = body.conversationId ?? null;
 
-    // Safety check
     const safety = buildSafetyCheck(message);
     if (!safety.safe) {
       res.setHeader("Content-Type", "text/event-stream");
@@ -203,22 +201,17 @@ router.post("/", async (req, res) => {
       return res.end();
     }
 
-    // Ensure conversation record
+    // Create or get conversation
     if (!conversationId) {
       const phase = CURRICULUM[phaseIndex];
       const title = phase
         ? `${phase.name} — ${sessionId.slice(0, 8)}`
         : `Session ${sessionId.slice(0, 8)}`;
-      const conv = await db.insert(conversationsTable).values({ title }).returning();
-      conversationId = conv[0].id;
+      const conv = db.createConversation(title);
+      conversationId = conv.id;
     }
 
-    const existingMessages = await db
-      .select()
-      .from(messagesTable)
-      .where(eq(messagesTable.conversationId, conversationId))
-      .orderBy(messagesTable.createdAt);
-
+    const existingMessages = db.getMessages(conversationId);
     const messageHistory = existingMessages.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -239,11 +232,7 @@ router.post("/", async (req, res) => {
       learnerMode,
     });
 
-    await db.insert(messagesTable).values({
-      conversationId,
-      role: "user",
-      content: message,
-    });
+    db.addMessage(conversationId, "user", message);
 
     const chatMessages = [
       { role: "system" as const, content: systemPrompt },
@@ -254,24 +243,15 @@ router.post("/", async (req, res) => {
       { role: "user" as const, content: message },
     ];
 
-    const fullResponse = await generateWithGauntlet(chatMessages, language);
+    const fullResponse = await generateWithGauntlet(chatMessages, language, model ?? undefined);
 
-    await db.insert(messagesTable).values({
-      conversationId,
-      role: "assistant",
-      content: fullResponse,
-    });
-
-    await db
-      .update(userProgressTable)
-      .set({ conversationId, selectedLanguage: language, selectedOs: os, updatedAt: new Date() })
-      .where(eq(userProgressTable.sessionId, sessionId));
+    db.addMessage(conversationId, "assistant", fullResponse);
+    db.upsertProgress(sessionId, { conversationId, selectedLanguage: language, selectedOs: os });
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    // Chunk the response so it still feels streaming
     const CHUNK = 20;
     for (let i = 0; i < fullResponse.length; i += CHUNK) {
       res.write(`data: ${JSON.stringify({ content: fullResponse.slice(i, i + CHUNK) })}\n\n`);

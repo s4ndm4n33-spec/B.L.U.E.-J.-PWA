@@ -11,6 +11,7 @@ import githubRouter from "./github.js";
 import executeRouter from "./execute.js";
 import unlockRouter from "./unlock.js";
 import workspaceRouter from "./workspace.js";
+import settingsRouter from "./settings.js";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/github", githubRouter);
 router.use("/execute", executeRouter);
 router.use("/unlock", unlockRouter);
 router.use("/workspace", workspaceRouter);
+router.use("/settings", settingsRouter);
 
 export default router;

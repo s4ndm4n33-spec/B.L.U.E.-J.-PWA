@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { getOpenAI, getFastModel, hasApiKey } from "../../lib/ai-client.js";
 
 const router: IRouter = Router();
 
@@ -48,17 +48,26 @@ EXPLANATION_END`;
 
 router.post("/", async (req, res) => {
   try {
-    const { code, language, os } = req.body as { code: string; language: string; os?: string };
+    if (!hasApiKey()) {
+      res.status(400).json({ error: "No API key configured. Set your key in Settings → AI Provider." });
+      return;
+    }
+
+    const { code, language, os, model } = req.body as {
+      code: string; language: string; os?: string; model?: string;
+    };
 
     if (!code?.trim()) {
       res.status(400).json({ error: "No code provided" });
       return;
     }
 
+    const openai = getOpenAI();
+    const useModel = model || getFastModel();
     const userPrompt = `Apply the Five Masters optimization to this ${language} code. Focus on memory efficiency and output performance:\n\n${code}`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: useModel,
       messages: [
         { role: "system", content: FIVE_MASTERS_OPTIMIZE(language) },
         { role: "user", content: userPrompt },

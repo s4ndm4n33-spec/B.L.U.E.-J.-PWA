@@ -4,3 +4,8 @@ dist/
 .env.local
 .replit
 pnpm-workspace.yaml
+# Build artifacts
+*.zip
+release/
+android/
+node_modules/
