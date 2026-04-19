@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.bluej.ai-simulator",
+  "productName": "B.L.U.E.-J.",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "server/**/*",
+    "electron-main.js",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "public/icons",
+      "to": "icons"
+    }
+  ],
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ],
+    "icon": "public/icons/icon-512.png",
+    "artifactName": "BLUE-J-${version}-Setup-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "B.L.U.E.-J."
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "public/icons/icon-512.png",
+    "category": "public.app-category.developer-tools",
+    "artifactName": "BLUE-J-${version}-macOS.${ext}"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "icon": "public/icons/icon-512.png",
+    "category": "Development",
+    "artifactName": "BLUE-J-${version}-linux.${ext}"
+  }
+}
