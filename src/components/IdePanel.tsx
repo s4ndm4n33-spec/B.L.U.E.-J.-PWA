@@ -6,10 +6,12 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   Copy, Play, Check, Download, Zap, ChevronDown, ChevronUp,
   Terminal as TerminalIcon, Loader2, X, Cpu, ChevronRight, Activity,
-  CheckCircle2, XCircle, FlaskConical, Bolt
+  CheckCircle2, XCircle, FlaskConical, Bolt, FolderOpen
 } from 'lucide-react';
 import { useChatStream } from '@/hooks/use-chat';
+import { optimizeOfflineCode } from '@/lib/offline-ai';
 import { DownloadModal } from './DownloadModal';
+import { WorkspaceManagerModal } from './WorkspaceManagerModal';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -54,12 +56,14 @@ export function IdePanel() {
   const {
     selectedLanguage, selectedOs, myCode, setMyCode,
     simHardwareProfile, setSimHardwareProfile, hardwareInfo,
+    providerMode, localModelReady, selectedWorkspaceFileId,
   } = useBlueJStore();
   const { messages, addSystemMessage } = useChatStream();
 
   const [activeTab, setActiveTab] = useState<IdeTab>('j_code');
   const [copied, setCopied] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
+  const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
@@ -174,12 +178,17 @@ export function IdePanel() {
     if (!myCode.trim()) return;
     setOptimizing(true);
     try {
-      const resp = await fetch(`/api/bluej/optimize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: myCode, language: selectedLanguage, os: selectedOs }),
-      });
-      const data = await resp.json() as { optimizedCode: string; explanation: string };
+      const useLocalOptimizer = providerMode !== 'cloud' && localModelReady;
+      const data = useLocalOptimizer
+        ? await optimizeOfflineCode(myCode, selectedLanguage)
+        : await (async () => {
+            const resp = await fetch(`/api/bluej/optimize`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: myCode, language: selectedLanguage, os: selectedOs }),
+            });
+            return resp.json() as Promise<{ optimizedCode: string; explanation: string }>;
+          })();
       if (data.optimizedCode) {
         setOriginalBeforeOptimize(myCode);
         setOptimizedCode(data.optimizedCode);
@@ -551,6 +560,20 @@ export function IdePanel() {
               </Tooltip>
             )}
 
+            <Tooltip content="Scoped workspace tools â€” import files, inspect diffs, and write with approval" position="top">
+              <button
+                onClick={() => setShowWorkspaceManager(true)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-sm transition-all text-xs font-hud uppercase tracking-wider ${
+                  selectedWorkspaceFileId
+                    ? 'border-accent/50 bg-accent/10 text-accent'
+                    : 'border-primary/20 text-primary/50 hover:text-primary/80'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Workspace</span>
+              </button>
+            </Tooltip>
+
             {/* Terminal Toggle */}
             <Tooltip content="Toggle terminal — shows simulation and real execution output" position="top">
               <button
@@ -618,6 +641,12 @@ export function IdePanel() {
       </div>
 
       {showDownload && <DownloadModal onClose={() => setShowDownload(false)} />}
+      {showWorkspaceManager && (
+        <WorkspaceManagerModal
+          onClose={() => setShowWorkspaceManager(false)}
+          open={showWorkspaceManager}
+        />
+      )}
 
       {/* Profile dropdown — portal so overflow:hidden on the IDE panel doesn't clip it */}
       {showProfileMenu && createPortal(

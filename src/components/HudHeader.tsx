@@ -1,20 +1,47 @@
 import { useState } from 'react';
-import { useBlueJStore, LEARNER_MODES, type OperatingSystem, type ProgrammingLanguage } from '@/lib/store';
-import { Monitor, Terminal, Code2, ShieldAlert, ShieldCheck, GraduationCap, HelpCircle, Target, Award } from 'lucide-react';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./ui/tooltip";
+import {
+  Award,
+  Bot,
+  Code2,
+  GraduationCap,
+  HelpCircle,
+  KeyRound,
+  Settings2,
+  ShieldAlert,
+  ShieldCheck,
+  Target,
+  Terminal,
+} from 'lucide-react';
+import {
+  LEARNER_MODES,
+  type OperatingSystem,
+  type ProgrammingLanguage,
+  useBlueJStore,
+} from '@/lib/store';
+import { Tooltip } from './ui/tooltip';
 import { HelpOverlay } from './HelpOverlay';
+import { SystemControlDrawer } from './SystemControlDrawer';
 
 export function HudHeader() {
   const {
-    selectedLanguage, setSelectedLanguage,
-    selectedOs, setSelectedOs,
-    hardwareMonitorEnabled, setHardwareMonitorEnabled,
+    selectedLanguage,
+    setSelectedLanguage,
+    selectedOs,
+    setSelectedOs,
+    hardwareMonitorEnabled,
+    setHardwareMonitorEnabled,
     hardwarePermissionGranted,
-    activeTab, setActiveTab,
-    learnerMode, cycleLearnerMode,
+    activeTab,
+    setActiveTab,
+    learnerMode,
+    cycleLearnerMode,
+    providerMode,
+    localModelReady,
+    unlockLevel,
   } = useBlueJStore();
 
   const [showHelp, setShowHelp] = useState(false);
+  const [showSystemControls, setShowSystemControls] = useState(false);
 
   const languages: { id: ProgrammingLanguage; label: string; tip: string }[] = [
     { id: 'python', label: 'PY', tip: 'Python 3.x — recommended for beginners and ML work' },
@@ -22,95 +49,114 @@ export function HudHeader() {
     { id: 'javascript', label: 'JS', tip: 'JavaScript (ES2022+, Node.js) — web and scripting' },
   ];
 
-  const osList: { id: OperatingSystem; label: string; tip: string }[] = [
+  const operatingSystems: { id: OperatingSystem; label: string; tip: string }[] = [
     { id: 'windows', label: 'WIN', tip: 'Windows — PowerShell / cmd.exe context' },
     { id: 'macos', label: 'MAC', tip: 'macOS — zsh Terminal context' },
     { id: 'linux', label: 'LINUX', tip: 'Linux — bash Terminal context' },
-    { id: 'android', label: 'AND', tip: 'Android — Termux terminal context' },
-    { id: 'ios', label: 'IOS', tip: 'iOS — Pythonista / a-Shell context' },
+    { id: 'android', label: 'AND', tip: 'Android — Termux or Capacitor mobile runtime context' },
+    { id: 'ios', label: 'IOS', tip: 'iOS — mobile-native shell with scoped workspace access' },
   ];
 
-  const currentLearnerLabel = LEARNER_MODES.find(m => m.id === learnerMode)?.shortLabel ?? 'BEGINNER';
+  const currentLearnerLabel = LEARNER_MODES.find((mode) => mode.id === learnerMode)?.shortLabel ?? 'BEGINNER';
+  const unlockLabel = unlockLevel === 'admin' ? 'ADMIN' : unlockLevel === 'course' ? 'COURSE' : 'LOCKED';
+  const providerLabel = providerMode === 'auto'
+    ? localModelReady ? 'AUTO/LOCAL' : 'AUTO/CLOUD'
+    : providerMode.toUpperCase();
 
   return (
     <>
       <header className="relative z-40 border-b border-primary/20 bg-background/80 backdrop-blur-xl">
-        <div className="px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
-
-          {/* Logo + Mobile Tabs */}
-          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+        <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 md:flex-row">
+          <div className="flex w-full items-center justify-between gap-3 md:w-auto md:justify-start">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-primary flex items-center justify-center glow-border relative overflow-hidden flex-shrink-0">
-                <div className="absolute inset-0 bg-primary/20 animate-pulse-glow"></div>
-                <span className="font-display font-bold text-primary text-sm relative z-10">J.</span>
+              <div className="glow-border relative flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-primary">
+                <div className="absolute inset-0 animate-pulse-glow bg-primary/20" />
+                <span className="relative z-10 font-display text-sm font-bold text-primary">
+                  J.
+                </span>
               </div>
               <div>
-                <h1 className="font-display font-bold text-xl text-primary glow-text tracking-widest leading-none">B.L.U.E.-J.</h1>
-                <p className="text-[0.6rem] font-mono text-primary/50 uppercase tracking-widest leading-tight">Build · Learn · Utilize · Engineer</p>
+                <h1 className="glow-text font-display text-xl font-bold leading-none tracking-widest text-primary">
+                  B.L.U.E.-J.
+                </h1>
+                <p className="font-mono text-[0.6rem] uppercase leading-tight tracking-widest text-primary/50">
+                  Build · Learn · Utilize · Engineer
+                </p>
               </div>
             </div>
 
-            {/* Mobile Tab Switcher */}
-            <div className="flex md:hidden bg-secondary border border-primary/30 p-1 rounded-sm">
+            <div className="flex rounded-sm border border-primary/30 bg-secondary p-1 md:hidden">
               <Tooltip content="Chat with J." position="bottom">
                 <button
                   onClick={() => setActiveTab('chat')}
-                  className={`px-2.5 py-1 text-xs font-hud rounded-sm transition-colors ${activeTab === 'chat' ? 'bg-primary/20 text-primary' : 'text-primary/50'}`}
+                  className={`rounded-sm px-2.5 py-1 text-xs font-hud transition-colors ${
+                    activeTab === 'chat' ? 'bg-primary/20 text-primary' : 'text-primary/50'
+                  }`}
                 >
-                  <Terminal className="w-4 h-4" />
+                  <Terminal className="h-4 w-4" />
                 </button>
               </Tooltip>
               <Tooltip content="IDE / Code Editor" position="bottom">
                 <button
                   onClick={() => setActiveTab('ide')}
-                  className={`px-2.5 py-1 text-xs font-hud rounded-sm transition-colors ${activeTab === 'ide' ? 'bg-primary/20 text-primary' : 'text-primary/50'}`}
+                  className={`rounded-sm px-2.5 py-1 text-xs font-hud transition-colors ${
+                    activeTab === 'ide' ? 'bg-primary/20 text-primary' : 'text-primary/50'
+                  }`}
                 >
-                  <Code2 className="w-4 h-4" />
+                  <Code2 className="h-4 w-4" />
                 </button>
               </Tooltip>
               <Tooltip content="Daily Goals & Progress" position="bottom">
                 <button
                   onClick={() => setActiveTab('goals')}
-                  className={`px-2.5 py-1 text-xs font-hud rounded-sm transition-colors ${activeTab === 'goals' ? 'bg-primary/20 text-primary' : 'text-primary/50'}`}
+                  className={`rounded-sm px-2.5 py-1 text-xs font-hud transition-colors ${
+                    activeTab === 'goals' ? 'bg-primary/20 text-primary' : 'text-primary/50'
+                  }`}
                 >
-                  <Target className="w-4 h-4" />
+                  <Target className="h-4 w-4" />
                 </button>
               </Tooltip>
               <Tooltip content="Achievements & Milestones" position="bottom">
                 <button
                   onClick={() => setActiveTab('achievements')}
-                  className={`px-2.5 py-1 text-xs font-hud rounded-sm transition-colors ${activeTab === 'achievements' ? 'bg-primary/20 text-primary' : 'text-primary/50'}`}
+                  className={`rounded-sm px-2.5 py-1 text-xs font-hud transition-colors ${
+                    activeTab === 'achievements' ? 'bg-primary/20 text-primary' : 'text-primary/50'
+                  }`}
                 >
-                  <Award className="w-4 h-4" />
+                  <Award className="h-4 w-4" />
                 </button>
               </Tooltip>
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-2 text-xs font-hud justify-center md:justify-end w-full md:w-auto">
-
-            {/* Language Toggle */}
-            <div className="flex items-center border border-primary/30 rounded-sm overflow-hidden bg-secondary/50">
-              {languages.map(lang => (
-                <Tooltip key={lang.id} content={lang.tip} position="bottom">
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 text-xs font-hud md:w-auto md:justify-end">
+            <div className="flex items-center overflow-hidden rounded-sm border border-primary/30 bg-secondary/50">
+              {languages.map((language) => (
+                <Tooltip key={language.id} content={language.tip} position="bottom">
                   <button
-                    onClick={() => setSelectedLanguage(lang.id)}
-                    className={`px-3 py-1.5 transition-all min-h-[32px] ${selectedLanguage === lang.id ? 'bg-primary/20 text-primary border-b-2 border-primary' : 'text-primary/50 hover:text-primary/80 border-b-2 border-transparent'}`}
+                    onClick={() => setSelectedLanguage(language.id)}
+                    className={`min-h-[32px] border-b-2 px-3 py-1.5 transition-all ${
+                      selectedLanguage === language.id
+                        ? 'border-primary bg-primary/20 text-primary'
+                        : 'border-transparent text-primary/50 hover:text-primary/80'
+                    }`}
                   >
-                    {lang.label}
+                    {language.label}
                   </button>
                 </Tooltip>
               ))}
             </div>
 
-            {/* OS Toggle */}
-            <div className="hidden sm:flex items-center border border-primary/30 rounded-sm overflow-hidden bg-secondary/50">
-              {osList.map(os => (
+            <div className="hidden items-center overflow-hidden rounded-sm border border-primary/30 bg-secondary/50 sm:flex">
+              {operatingSystems.map((os) => (
                 <Tooltip key={os.id} content={os.tip} position="bottom">
                   <button
                     onClick={() => setSelectedOs(os.id)}
-                    className={`px-2 py-1.5 transition-all min-h-[32px] ${selectedOs === os.id ? 'bg-accent/20 text-accent border-b-2 border-accent' : 'text-primary/50 hover:text-primary/80 border-b-2 border-transparent'}`}
+                    className={`min-h-[32px] border-b-2 px-2 py-1.5 transition-all ${
+                      selectedOs === os.id
+                        ? 'border-accent bg-accent/20 text-accent'
+                        : 'border-transparent text-primary/50 hover:text-primary/80'
+                    }`}
                   >
                     {os.label}
                   </button>
@@ -118,59 +164,76 @@ export function HudHeader() {
               ))}
             </div>
 
-            {/* Learner Mode Toggle */}
-            <Tooltip content="Cycle learner mode — adjusts J.'s vocabulary, code complexity, and teaching pace" position="bottom">
+            <Tooltip content="Cycle learner mode — adjusts vocabulary, pacing, and code density" position="bottom">
               <button
                 onClick={cycleLearnerMode}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 min-h-[32px] border border-accent/40 bg-accent/5 hover:bg-accent/15 text-accent rounded-sm transition-all"
+                className="flex min-h-[32px] items-center gap-1.5 rounded-sm border border-accent/40 bg-accent/5 px-2.5 py-1.5 text-accent transition-all hover:bg-accent/15"
               >
-                <GraduationCap className="w-3.5 h-3.5 flex-shrink-0" />
+                <GraduationCap className="h-3.5 w-3.5 flex-shrink-0" />
                 <span className="hidden sm:inline">{currentLearnerLabel}</span>
               </button>
             </Tooltip>
 
-            {/* Hardware Toggle */}
-            <Tooltip
-              content={
-                !hardwarePermissionGranted
-                  ? 'Hardware monitor — grant permission during startup to enable'
-                  : hardwareMonitorEnabled
-                  ? 'Hardware monitor active — J. knows your CPU/RAM specs'
-                  : 'Hardware monitor paused — click to resume'
-              }
-              position="bottom"
-            >
+            <Tooltip content="Hardware monitor — lets J. tailor guidance to your device" position="bottom">
               <button
                 onClick={() => hardwarePermissionGranted && setHardwareMonitorEnabled(!hardwareMonitorEnabled)}
                 disabled={!hardwarePermissionGranted}
-                className={`p-1.5 min-h-[32px] min-w-[32px] rounded-sm border transition-all flex items-center justify-center ${
-                  !hardwarePermissionGranted ? 'border-muted text-muted cursor-not-allowed' :
-                  hardwareMonitorEnabled ? 'border-primary/50 bg-primary/10 text-primary glow-border' : 'border-primary/20 text-primary/50'
+                className={`flex min-h-[32px] min-w-[32px] items-center justify-center rounded-sm border p-1.5 transition-all ${
+                  !hardwarePermissionGranted
+                    ? 'cursor-not-allowed border-muted text-muted'
+                    : hardwareMonitorEnabled
+                      ? 'glow-border border-primary/50 bg-primary/10 text-primary'
+                      : 'border-primary/20 text-primary/50'
                 }`}
               >
-                {hardwareMonitorEnabled ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                {hardwareMonitorEnabled ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
               </button>
             </Tooltip>
 
-            {/* Help Button */}
-            <Tooltip content="Workspace guide — how to use every panel and button" position="bottom">
+            <div className="hidden items-center gap-2 rounded-sm border border-primary/20 bg-black/20 px-2.5 py-1.5 sm:flex">
+              <Bot className="h-3.5 w-3.5 text-primary/70" />
+              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-primary/65">
+                {providerLabel}
+              </span>
+            </div>
+
+            <div className="hidden items-center gap-2 rounded-sm border border-yellow-500/20 bg-yellow-500/5 px-2.5 py-1.5 sm:flex">
+              <KeyRound className="h-3.5 w-3.5 text-yellow-400/80" />
+              <span className="font-mono text-[0.65rem] uppercase tracking-widest text-yellow-300/80">
+                {unlockLabel}
+              </span>
+            </div>
+
+            <Tooltip content="System controls — provider, voice, permissions, unlock state" position="bottom">
+              <button
+                onClick={() => setShowSystemControls(true)}
+                className="flex min-h-[32px] min-w-[32px] items-center justify-center rounded-sm border border-primary/20 p-1.5 text-primary/60 transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
+            </Tooltip>
+
+            <Tooltip content="Workspace guide — how to use every panel and switch" position="bottom">
               <button
                 onClick={() => setShowHelp(true)}
-                className="p-1.5 min-h-[32px] min-w-[32px] rounded-sm border border-primary/20 hover:border-primary/50 hover:bg-primary/10 text-primary/50 hover:text-primary transition-all flex items-center justify-center"
+                className="flex min-h-[32px] min-w-[32px] items-center justify-center rounded-sm border border-primary/20 p-1.5 text-primary/50 transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
               >
-                <HelpCircle className="w-4 h-4" />
+                <HelpCircle className="h-4 w-4" />
               </button>
             </Tooltip>
           </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="w-full h-1 bg-secondary relative">
-          <div className="absolute top-0 left-0 h-full bg-primary glow-border w-1/6 transition-all duration-1000 ease-out"></div>
+        <div className="relative h-1 w-full bg-secondary">
+          <div className="glow-border absolute left-0 top-0 h-full w-1/6 bg-primary transition-all duration-1000 ease-out" />
         </div>
       </header>
 
       <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
+      <SystemControlDrawer
+        open={showSystemControls}
+        onClose={() => setShowSystemControls(false)}
+      />
     </>
   );
 }

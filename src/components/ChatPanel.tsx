@@ -1,24 +1,34 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStream } from '@/hooks/use-chat';
 import { useAudioOutput, useVoiceRecording } from '@/hooks/use-audio';
+import { useBlueJStore } from '@/lib/store';
 import { Send, Mic, Volume2, VolumeX, Terminal as TerminalIcon, Loader2, MicOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function ChatPanel() {
   const { messages, isTyping, sendMessage } = useChatStream();
+  const { voiceInteractionMode, speechEnabled } = useBlueJStore();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { isPlaying, playBase64Audio, stopAudio } = useAudioOutput();
+  const { isPlaying, playBase64Audio, speakText, stopAudio } = useAudioOutput();
+
+  const handlePlayback = useCallback((payload: string, format: string) => {
+    if (format === 'device-native') {
+      void speakText(payload);
+      return;
+    }
+    playBase64Audio(payload, format);
+  }, [playBase64Audio, speakText]);
 
   const handleTranscription = useCallback((text: string) => {
     if (text.trim()) {
       // Auto-submit voice input
-      sendMessage(text, playBase64Audio, true);
+      sendMessage(text, handlePlayback, true);
       setInput("");
     }
-  }, [sendMessage, playBase64Audio]);
+  }, [handlePlayback, sendMessage]);
 
   const { isRecording, isTranscribing, recordingState, startRecording, stopRecording } = useVoiceRecording(handleTranscription);
 
@@ -30,7 +40,7 @@ export function ChatPanel() {
 
   const handleSend = () => {
     if (input.trim()) {
-      sendMessage(input, playBase64Audio, false);
+      sendMessage(input, handlePlayback, false);
       setInput("");
     }
   };
@@ -161,16 +171,33 @@ export function ChatPanel() {
 
           {/* Mic Button */}
           <button
-            onClick={handleMicClick}
-            disabled={isTranscribing}
-            title={micLabel}
-            className={`h-[56px] w-[48px] flex items-center justify-center rounded-sm border transition-all flex-shrink-0 ${
-              recordingState === 'error'
+          onClick={handleMicClick}
+          onMouseDown={() => {
+            if (voiceInteractionMode === 'push-to-talk' && !isRecording && !isTranscribing) {
+              void startRecording();
+            }
+          }}
+          onMouseUp={() => {
+            if (voiceInteractionMode === 'push-to-talk' && isRecording) {
+              stopRecording();
+            }
+          }}
+          onMouseLeave={() => {
+            if (voiceInteractionMode === 'push-to-talk' && isRecording) {
+              stopRecording();
+            }
+          }}
+          disabled={isTranscribing || !speechEnabled}
+          title={micLabel}
+          className={`h-[56px] w-[48px] flex items-center justify-center rounded-sm border transition-all flex-shrink-0 ${
+            recordingState === 'error'
                 ? 'border-destructive/50 bg-destructive/10 text-destructive'
                 : isRecording
                 ? 'border-destructive bg-destructive/20 text-destructive animate-pulse'
                 : isTranscribing
                 ? 'border-accent/50 bg-accent/10 text-accent cursor-wait'
+                : !speechEnabled
+                ? 'border-primary/10 bg-secondary text-primary/20 cursor-not-allowed'
                 : 'border-primary/30 bg-secondary text-primary/60 hover:text-primary hover:border-primary/60'
             }`}
           >

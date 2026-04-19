@@ -27,6 +27,29 @@ export interface TtsResponse {
   format: string;
 }
 
+export interface UnlockRequestBody {
+  sessionId: string;
+  password: string;
+  courseGatePassed: boolean;
+}
+
+export interface UnlockResponse {
+  unlocked: boolean;
+  level: "locked" | "course" | "admin";
+  message: string;
+}
+
+export interface PatchFileRequestBody {
+  content: string;
+  instruction: string;
+  language: string;
+}
+
+export interface PatchFileResponse {
+  updatedContent: string;
+  summary: string;
+}
+
 export function useGetProgress(sessionId: string) {
   return useQuery({
     queryKey: ['/api/bluej/progress', sessionId],
@@ -76,5 +99,37 @@ export function useTextToSpeech() {
       if (!res.ok) throw new Error('TTS Failed');
       return res.json();
     }
+  });
+}
+
+export function useUnlockAgent() {
+  return useMutation({
+    mutationFn: async (data: UnlockRequestBody): Promise<UnlockResponse> => {
+      const res = await fetch('/api/bluej/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        throw new Error('Unlock failed');
+      }
+      return res.json();
+    },
+  });
+}
+
+export function usePatchWorkspaceFile() {
+  return useMutation({
+    mutationFn: async (data: PatchFileRequestBody): Promise<PatchFileResponse> => {
+      const res = await fetch('/api/bluej/workspace/patch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        throw new Error('Patch proposal failed');
+      }
+      return res.json();
+    },
   });
 }

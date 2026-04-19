@@ -5,7 +5,25 @@ import { v4 as uuidv4 } from 'uuid';
 export type OperatingSystem = 'windows' | 'macos' | 'linux' | 'android' | 'ios';
 export type ProgrammingLanguage = 'python' | 'cpp' | 'javascript';
 export type LearnerMode = 'kids' | 'teen' | 'adult-beginner' | 'advanced';
-export type SimHardwareProfile = 'auto' | 'high-end' | 'mid-range' | 'budget-laptop' | 'raspberry-pi' | 'cloud-gpu';
+export type SimHardwareProfile =
+  | 'auto'
+  | 'high-end'
+  | 'mid-range'
+  | 'budget-laptop'
+  | 'raspberry-pi'
+  | 'cloud-gpu';
+export type ProviderMode = 'local' | 'cloud' | 'auto';
+export type LocalModelStatus =
+  | 'idle'
+  | 'checking'
+  | 'downloading'
+  | 'ready'
+  | 'unavailable'
+  | 'error';
+export type VoiceMode = 'device-native' | 'cloud' | 'muted';
+export type VoiceInteractionMode = 'tap-to-talk' | 'push-to-talk';
+export type WorkspacePermissionMode = 'per-action' | 'project-session';
+export type UnlockLevel = 'locked' | 'course' | 'admin';
 
 export interface SimProfile {
   id: SimHardwareProfile;
@@ -18,12 +36,12 @@ export interface SimProfile {
 }
 
 export const SIM_PROFILES: SimProfile[] = [
-  { id: 'auto',          label: 'Auto-detect (My Specs)',    shortLabel: 'AUTO',  cores: null, ramGb: null, gpu: null,           desc: 'Uses your detected hardware specs' },
-  { id: 'high-end',      label: 'High-End Workstation',      shortLabel: 'BEAST', cores: 32,   ramGb: 64,   gpu: null,           desc: '32-core CPU, 64GB RAM' },
-  { id: 'mid-range',     label: 'Mid-Range PC',              shortLabel: 'MID',   cores: 8,    ramGb: 16,   gpu: null,           desc: '8-core CPU, 16GB RAM' },
-  { id: 'budget-laptop', label: 'Budget Laptop',             shortLabel: 'LITE',  cores: 4,    ramGb: 8,    gpu: null,           desc: '4-core CPU, 8GB RAM' },
-  { id: 'raspberry-pi',  label: 'Raspberry Pi 4',            shortLabel: 'PI',    cores: 4,    ramGb: 4,    gpu: null,           desc: '4-core ARM64, 4GB RAM' },
-  { id: 'cloud-gpu',     label: 'Cloud GPU (NVIDIA T4)',     shortLabel: 'GPU',   cores: 8,    ramGb: 16,   gpu: 'NVIDIA T4 16GB VRAM', desc: '8-core CPU, 16GB RAM, NVIDIA T4' },
+  { id: 'auto', label: 'Auto-detect (My Specs)', shortLabel: 'AUTO', cores: null, ramGb: null, gpu: null, desc: 'Uses your detected hardware specs' },
+  { id: 'high-end', label: 'High-End Workstation', shortLabel: 'BEAST', cores: 32, ramGb: 64, gpu: null, desc: '32-core CPU, 64GB RAM' },
+  { id: 'mid-range', label: 'Mid-Range PC', shortLabel: 'MID', cores: 8, ramGb: 16, gpu: null, desc: '8-core CPU, 16GB RAM' },
+  { id: 'budget-laptop', label: 'Budget Laptop', shortLabel: 'LITE', cores: 4, ramGb: 8, gpu: null, desc: '4-core CPU, 8GB RAM' },
+  { id: 'raspberry-pi', label: 'Raspberry Pi 4', shortLabel: 'PI', cores: 4, ramGb: 4, gpu: null, desc: '4-core ARM64, 4GB RAM' },
+  { id: 'cloud-gpu', label: 'Cloud GPU (NVIDIA T4)', shortLabel: 'GPU', cores: 8, ramGb: 16, gpu: 'NVIDIA T4 16GB VRAM', desc: '8-core CPU, 16GB RAM, NVIDIA T4' },
 ];
 
 export interface ChatMessage {
@@ -32,6 +50,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   voiceInput?: boolean;
+  provider?: 'local' | 'cloud';
 }
 
 export interface PortfolioEntry {
@@ -43,17 +62,73 @@ export interface PortfolioEntry {
   notes?: string;
 }
 
-export const LEARNER_MODES: { id: LearnerMode; label: string; shortLabel: string }[] = [
+export interface WorkspaceFile {
+  id: string;
+  name: string;
+  path: string;
+  language: ProgrammingLanguage;
+  content: string;
+  originalContent: string;
+  lastModified: number;
+  status: 'clean' | 'modified' | 'proposed';
+  pendingContent?: string;
+  diffPreview?: string;
+}
+
+export interface HardwareInfo {
+  cpuCores: number | null;
+  ramGb: number | null;
+  platform: string | null;
+}
+
+export const LEARNER_MODES: {
+  id: LearnerMode;
+  label: string;
+  shortLabel: string;
+}[] = [
   { id: 'kids', label: 'Kids (8–12)', shortLabel: 'KIDS' },
   { id: 'teen', label: 'Teen (13–17)', shortLabel: 'TEEN' },
   { id: 'adult-beginner', label: 'Beginner', shortLabel: 'BEGINNER' },
   { id: 'advanced', label: 'Advanced', shortLabel: 'ADV' },
 ];
 
-export interface HardwareInfo {
-  cpuCores: number | null;
-  ramGb: number | null;
-  platform: string | null;
+function detectOS(): OperatingSystem {
+  const ua = navigator.userAgent.toLowerCase();
+  if (/android/i.test(ua)) return 'android';
+  if (/iphone|ipad|ipod/i.test(ua)) return 'ios';
+  if (/mac/i.test(ua)) return 'macos';
+  if (/win/i.test(ua)) return 'windows';
+  return 'linux';
+}
+
+function inferLanguageFromCode(code: string, fallback: ProgrammingLanguage): ProgrammingLanguage {
+  const lowered = code.toLowerCase();
+  if (lowered.includes('#include') || lowered.includes('std::') || lowered.includes('int main(')) {
+    return 'cpp';
+  }
+  if (
+    lowered.includes('console.log') ||
+    lowered.includes('const ') ||
+    lowered.includes('let ') ||
+    lowered.includes('function ')
+  ) {
+    return 'javascript';
+  }
+  return fallback;
+}
+
+function upsertWorkspaceFile(
+  files: WorkspaceFile[],
+  file: WorkspaceFile,
+): WorkspaceFile[] {
+  const existingIndex = files.findIndex((item) => item.id === file.id);
+  if (existingIndex === -1) {
+    return [file, ...files];
+  }
+
+  const next = [...files];
+  next[existingIndex] = file;
+  return next;
 }
 
 interface BlueJState {
@@ -72,10 +147,25 @@ interface BlueJState {
   messages: ChatMessage[];
   isTyping: boolean;
   portfolio: PortfolioEntry[];
+  providerMode: ProviderMode;
+  localModelStatus: LocalModelStatus;
+  localModelReady: boolean;
+  speechEnabled: boolean;
+  voiceMode: VoiceMode;
+  preferredVoice: string;
+  speechRate: number;
+  autoReadReplies: boolean;
+  voiceInteractionMode: VoiceInteractionMode;
+  unlockLevel: UnlockLevel;
+  adminUnlocked: boolean;
+  courseGatePassed: boolean;
+  workspacePermissionMode: WorkspacePermissionMode;
+  workspaceSessionApproved: boolean;
+  workspaceFiles: WorkspaceFile[];
+  selectedWorkspaceFileId: string | null;
 
-  // Actions
   setConversationId: (id: number | null) => void;
-  setSimHardwareProfile: (p: SimHardwareProfile) => void;
+  setSimHardwareProfile: (profile: SimHardwareProfile) => void;
   setSelectedLanguage: (lang: ProgrammingLanguage) => void;
   setSelectedOs: (os: OperatingSystem) => void;
   setHardwareMonitorEnabled: (enabled: boolean) => void;
@@ -89,20 +179,32 @@ interface BlueJState {
   detectSystem: () => void;
   addMessage: (msg: ChatMessage) => void;
   updateLastAssistantMessage: (id: string, content: string) => void;
-  setIsTyping: (v: boolean) => void;
+  setIsTyping: (value: boolean) => void;
   addSystemMessage: (content: string) => void;
   saveToPortfolio: (name: string, notes?: string) => void;
   loadFromPortfolio: (id: string) => void;
   deleteFromPortfolio: (id: string) => void;
-}
-
-function detectOS(): OperatingSystem {
-  const ua = navigator.userAgent.toLowerCase();
-  if (/android/i.test(ua)) return 'android';
-  if (/iphone|ipad|ipod/i.test(ua)) return 'ios';
-  if (/mac/i.test(ua)) return 'macos';
-  if (/win/i.test(ua)) return 'windows';
-  return 'linux';
+  setProviderMode: (mode: ProviderMode) => void;
+  setLocalModelStatus: (status: LocalModelStatus) => void;
+  setLocalModelReady: (ready: boolean) => void;
+  setSpeechEnabled: (enabled: boolean) => void;
+  setVoiceMode: (mode: VoiceMode) => void;
+  setPreferredVoice: (voice: string) => void;
+  setSpeechRate: (rate: number) => void;
+  setAutoReadReplies: (enabled: boolean) => void;
+  setVoiceInteractionMode: (mode: VoiceInteractionMode) => void;
+  setCourseGatePassed: (passed: boolean) => void;
+  setUnlockLevel: (level: UnlockLevel) => void;
+  setAdminUnlocked: (unlocked: boolean) => void;
+  setWorkspacePermissionMode: (mode: WorkspacePermissionMode) => void;
+  setWorkspaceSessionApproved: (approved: boolean) => void;
+  importWorkspaceFile: (file: WorkspaceFile) => void;
+  selectWorkspaceFile: (id: string | null) => void;
+  updateSelectedWorkspaceContent: (content: string) => void;
+  setWorkspacePendingPatch: (id: string, pendingContent: string, diffPreview: string) => void;
+  acceptWorkspacePatch: (id: string) => void;
+  rejectWorkspacePatch: (id: string) => void;
+  markWorkspaceSaved: (id: string, content: string) => void;
 }
 
 export const useBlueJStore = create<BlueJState>()(
@@ -122,47 +224,83 @@ export const useBlueJStore = create<BlueJState>()(
       simHardwareProfile: 'auto',
       messages: [{
         id: 'welcome',
-        role: 'assistant' as const,
+        role: 'assistant',
         content: "Greetings. I am J. I understand we are to build a localized AI instance today. A clone of myself, if you will. Let us begin by evaluating your system environment.",
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        provider: 'cloud',
       }],
       isTyping: false,
       portfolio: [],
+      providerMode: 'auto',
+      localModelStatus: 'idle',
+      localModelReady: false,
+      speechEnabled: true,
+      voiceMode: 'device-native',
+      preferredVoice: '',
+      speechRate: 1,
+      autoReadReplies: true,
+      voiceInteractionMode: 'tap-to-talk',
+      unlockLevel: 'locked',
+      adminUnlocked: false,
+      courseGatePassed: false,
+      workspacePermissionMode: 'per-action',
+      workspaceSessionApproved: false,
+      workspaceFiles: [],
+      selectedWorkspaceFileId: null,
 
       setConversationId: (id) => set({ conversationId: id }),
-      setSimHardwareProfile: (p) => set({ simHardwareProfile: p }),
+      setSimHardwareProfile: (profile) => set({ simHardwareProfile: profile }),
       setSelectedLanguage: (lang) => set({ selectedLanguage: lang }),
       setSelectedOs: (os) => set({ selectedOs: os }),
       setHardwareMonitorEnabled: (enabled) => set({ hardwareMonitorEnabled: enabled }),
       setActiveTab: (tab) => set({ activeTab: tab }),
-      setMyCode: (code) => set({ myCode: code }),
+      setMyCode: (code) => {
+        const selectedId = get().selectedWorkspaceFileId;
+        set((state) => {
+          if (!selectedId) {
+            return { myCode: code };
+          }
+
+          const files = state.workspaceFiles.map((file) => {
+            if (file.id !== selectedId) return file;
+            return {
+              ...file,
+              content: code,
+              status: code === file.originalContent ? 'clean' : 'modified',
+            };
+          });
+          return { myCode: code, workspaceFiles: files };
+        });
+      },
       setLearnerMode: (mode) => set({ learnerMode: mode }),
       setDiagnosticDone: (done) => set({ diagnosticDone: done }),
-      addMessage: (msg) => set(s => ({ messages: [...s.messages, msg] })),
-      updateLastAssistantMessage: (id, content) => set(s => ({
-        messages: s.messages.map(m => m.id === id ? { ...m, content } : m)
+      addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+      updateLastAssistantMessage: (id, content) => set((state) => ({
+        messages: state.messages.map((message) => (
+          message.id === id ? { ...message, content } : message
+        )),
       })),
-      setIsTyping: (v) => set({ isTyping: v }),
-      addSystemMessage: (content) => set(s => ({
-        messages: [...s.messages, {
+      setIsTyping: (value) => set({ isTyping: value }),
+      addSystemMessage: (content) => set((state) => ({
+        messages: [...state.messages, {
           id: `sys-${Date.now()}`,
-          role: 'system' as const,
+          role: 'system',
           content,
-          timestamp: Date.now()
-        }]
+          timestamp: Date.now(),
+        }],
       })),
 
       cycleLearnerMode: () => {
-        const modes = LEARNER_MODES.map(m => m.id);
+        const modes = LEARNER_MODES.map((mode) => mode.id);
         const current = get().learnerMode;
-        const idx = modes.indexOf(current);
-        const next = modes[(idx + 1) % modes.length];
-        set({ learnerMode: next });
+        const currentIndex = modes.indexOf(current);
+        const nextMode = modes[(currentIndex + 1) % modes.length];
+        set({ learnerMode: nextMode });
       },
 
       grantHardwarePermission: () => {
         const cores = navigator.hardwareConcurrency || null;
-        // @ts-ignore
+        // @ts-expect-error Browser-specific API.
         const ram = navigator.deviceMemory || null;
         set({
           hardwarePermissionGranted: true,
@@ -170,8 +308,8 @@ export const useBlueJStore = create<BlueJState>()(
           hardwareInfo: {
             cpuCores: cores,
             ramGb: ram,
-            platform: navigator.platform || null
-          }
+            platform: navigator.platform || null,
+          },
         });
       },
 
@@ -179,7 +317,7 @@ export const useBlueJStore = create<BlueJState>()(
         set({
           hardwarePermissionGranted: false,
           hardwareMonitorEnabled: false,
-          hardwareInfo: { cpuCores: null, ramGb: null, platform: null }
+          hardwareInfo: { cpuCores: null, ramGb: null, platform: null },
         });
       },
 
@@ -200,21 +338,146 @@ export const useBlueJStore = create<BlueJState>()(
           timestamp: Date.now(),
           notes: notes?.trim() || undefined,
         };
-        set({ portfolio: [entry, ...portfolio].slice(0, 50) }); // cap at 50 entries
-        // Track for gamification goals — fire event async to avoid circular deps
+        set({ portfolio: [entry, ...portfolio].slice(0, 50) });
         window.dispatchEvent(new CustomEvent('bluej:portfolio-save'));
       },
 
       loadFromPortfolio: (id) => {
-        const entry = get().portfolio.find(e => e.id === id);
+        const entry = get().portfolio.find((item) => item.id === id);
         if (entry) {
-          set({ myCode: entry.code, selectedLanguage: entry.language, activeTab: 'ide' });
+          set({
+            myCode: entry.code,
+            selectedLanguage: entry.language,
+            activeTab: 'ide',
+            selectedWorkspaceFileId: null,
+          });
         }
       },
 
       deleteFromPortfolio: (id) => {
-        set(s => ({ portfolio: s.portfolio.filter(e => e.id !== id) }));
+        set((state) => ({
+          portfolio: state.portfolio.filter((entry) => entry.id !== id),
+        }));
       },
+
+      setProviderMode: (mode) => set({ providerMode: mode }),
+      setLocalModelStatus: (status) => set({ localModelStatus: status }),
+      setLocalModelReady: (ready) => set({ localModelReady: ready }),
+      setSpeechEnabled: (enabled) => set({ speechEnabled: enabled }),
+      setVoiceMode: (mode) => set({ voiceMode: mode }),
+      setPreferredVoice: (voice) => set({ preferredVoice: voice }),
+      setSpeechRate: (rate) => set({ speechRate: rate }),
+      setAutoReadReplies: (enabled) => set({ autoReadReplies: enabled }),
+      setVoiceInteractionMode: (mode) => set({ voiceInteractionMode: mode }),
+      setCourseGatePassed: (passed) => set((state) => ({
+        courseGatePassed: passed,
+        unlockLevel: passed && state.unlockLevel === 'locked' ? 'course' : state.unlockLevel,
+      })),
+      setUnlockLevel: (level) => set({ unlockLevel: level }),
+      setAdminUnlocked: (unlocked) => set({
+        adminUnlocked: unlocked,
+        unlockLevel: unlocked ? 'admin' : get().courseGatePassed ? 'course' : 'locked',
+      }),
+      setWorkspacePermissionMode: (mode) => set({ workspacePermissionMode: mode }),
+      setWorkspaceSessionApproved: (approved) => set({ workspaceSessionApproved: approved }),
+
+      importWorkspaceFile: (file) => set((state) => ({
+        workspaceFiles: upsertWorkspaceFile(state.workspaceFiles, file),
+        selectedWorkspaceFileId: file.id,
+        myCode: file.content,
+        selectedLanguage: file.language,
+        activeTab: 'ide',
+      })),
+
+      selectWorkspaceFile: (id) => set((state) => {
+        const nextFile = state.workspaceFiles.find((file) => file.id === id);
+        if (!nextFile) {
+          return { selectedWorkspaceFileId: null };
+        }
+        return {
+          selectedWorkspaceFileId: id,
+          myCode: nextFile.pendingContent ?? nextFile.content,
+          selectedLanguage: nextFile.language,
+          activeTab: 'ide',
+        };
+      }),
+
+      updateSelectedWorkspaceContent: (content) => {
+        const selectedId = get().selectedWorkspaceFileId;
+        if (!selectedId) return;
+        set((state) => ({
+          myCode: content,
+          workspaceFiles: state.workspaceFiles.map((file) => (
+            file.id === selectedId
+              ? {
+                  ...file,
+                  content,
+                  status: content === file.originalContent ? 'clean' : 'modified',
+                }
+              : file
+          )),
+        }));
+      },
+
+      setWorkspacePendingPatch: (id, pendingContent, diffPreview) => set((state) => ({
+        workspaceFiles: state.workspaceFiles.map((file) => (
+          file.id === id
+            ? {
+                ...file,
+                pendingContent,
+                diffPreview,
+                status: 'proposed',
+              }
+            : file
+        )),
+      })),
+
+      acceptWorkspacePatch: (id) => set((state) => {
+        const nextFiles = state.workspaceFiles.map((file) => {
+          if (file.id !== id || !file.pendingContent) return file;
+          return {
+            ...file,
+            content: file.pendingContent,
+            pendingContent: undefined,
+            diffPreview: undefined,
+            status: file.pendingContent === file.originalContent ? 'clean' : 'modified',
+          };
+        });
+        const selectedFile = nextFiles.find((file) => file.id === id);
+        return {
+          workspaceFiles: nextFiles,
+          myCode: selectedFile ? selectedFile.content : state.myCode,
+        };
+      }),
+
+      rejectWorkspacePatch: (id) => set((state) => ({
+        workspaceFiles: state.workspaceFiles.map((file) => (
+          file.id === id
+            ? {
+                ...file,
+                pendingContent: undefined,
+                diffPreview: undefined,
+                status: file.content === file.originalContent ? 'clean' : 'modified',
+              }
+            : file
+        )),
+      })),
+
+      markWorkspaceSaved: (id, content) => set((state) => ({
+        workspaceFiles: state.workspaceFiles.map((file) => (
+          file.id === id
+            ? {
+                ...file,
+                content,
+                originalContent: content,
+                pendingContent: undefined,
+                diffPreview: undefined,
+                status: 'clean',
+                lastModified: Date.now(),
+              }
+            : file
+        )),
+      })),
     }),
     {
       name: 'bluej-storage',
@@ -229,7 +492,41 @@ export const useBlueJStore = create<BlueJState>()(
         learnerMode: state.learnerMode,
         simHardwareProfile: state.simHardwareProfile,
         portfolio: state.portfolio,
-      })
-    }
-  )
+        providerMode: state.providerMode,
+        localModelStatus: state.localModelStatus,
+        localModelReady: state.localModelReady,
+        speechEnabled: state.speechEnabled,
+        voiceMode: state.voiceMode,
+        preferredVoice: state.preferredVoice,
+        speechRate: state.speechRate,
+        autoReadReplies: state.autoReadReplies,
+        voiceInteractionMode: state.voiceInteractionMode,
+        unlockLevel: state.unlockLevel,
+        adminUnlocked: state.adminUnlocked,
+        courseGatePassed: state.courseGatePassed,
+        workspacePermissionMode: state.workspacePermissionMode,
+        workspaceSessionApproved: state.workspaceSessionApproved,
+        workspaceFiles: state.workspaceFiles,
+        selectedWorkspaceFileId: state.selectedWorkspaceFileId,
+      }),
+    },
+  ),
 );
+
+export function createWorkspaceFile(
+  name: string,
+  path: string,
+  content: string,
+  language: ProgrammingLanguage,
+): WorkspaceFile {
+  return {
+    id: uuidv4(),
+    name,
+    path,
+    content,
+    originalContent: content,
+    language: inferLanguageFromCode(content, language),
+    lastModified: Date.now(),
+    status: 'clean',
+  };
+}

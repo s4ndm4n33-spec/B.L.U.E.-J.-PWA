@@ -9,6 +9,8 @@ import optimizeRouter from "./optimize.js";
 import diagnosticRouter from "./diagnostic.js";
 import githubRouter from "./github.js";
 import executeRouter from "./execute.js";
+import unlockRouter from "./unlock.js";
+import workspaceRouter from "./workspace.js";
 
 const router: IRouter = Router();
 
@@ -22,5 +24,7 @@ router.use("/optimize", optimizeRouter);
 router.use("/diagnostic", diagnosticRouter);
 router.use("/github", githubRouter);
 router.use("/execute", executeRouter);
+router.use("/unlock", unlockRouter);
+router.use("/workspace", workspaceRouter);
 
 export default router;

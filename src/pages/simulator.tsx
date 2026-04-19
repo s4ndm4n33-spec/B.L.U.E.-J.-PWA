@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useBlueJStore } from '@/lib/store';
 import { useProgressStore } from '@/lib/progress-store';
 import { useProgressEvents } from '@/hooks/use-progress-events';
+import { isOfflineReady, supportsWebGPU } from '@/lib/offline-ai';
 import { HardwareBanner } from '@/components/HardwareBanner';
 import { HudHeader } from '@/components/HudHeader';
 import { ChatPanel } from '@/components/ChatPanel';
@@ -15,7 +16,18 @@ import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { AnimatePresence } from 'framer-motion';
 
 export default function SimulatorPage() {
-  const { detectSystem, activeTab, diagnosticDone, setDiagnosticDone, selectedLanguage, learnerMode } = useBlueJStore();
+  const {
+    detectSystem,
+    activeTab,
+    diagnosticDone,
+    setDiagnosticDone,
+    selectedLanguage,
+    learnerMode,
+    setLocalModelReady,
+    setLocalModelStatus,
+    sessionId,
+    setCourseGatePassed,
+  } = useBlueJStore();
   const { refreshDailyGoals, updateStreak, trackLanguageUsed, trackModeUsed } = useProgressStore();
 
   useProgressEvents(); // Wire custom events to progress store
@@ -24,7 +36,39 @@ export default function SimulatorPage() {
     detectSystem();
     refreshDailyGoals();
     updateStreak();
-  }, [detectSystem, refreshDailyGoals, updateStreak]);
+    if (isOfflineReady()) {
+      setLocalModelReady(true);
+      setLocalModelStatus('ready');
+    } else if (supportsWebGPU()) {
+      setLocalModelReady(false);
+      setLocalModelStatus('idle');
+    } else {
+      setLocalModelReady(false);
+      setLocalModelStatus('unavailable');
+    }
+  }, [
+    detectSystem,
+    refreshDailyGoals,
+    sessionId,
+    setLocalModelReady,
+    setLocalModelStatus,
+    updateStreak,
+  ]);
+
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        const response = await fetch(`/api/bluej/progress?sessionId=${sessionId}`);
+        if (!response.ok) return;
+        const data = await response.json() as { completedTasks?: number[] };
+        setCourseGatePassed((data.completedTasks?.length ?? 0) >= 12);
+      } catch {
+        // Leave course gate locked if progress cannot be read.
+      }
+    };
+
+    void loadProgress();
+  }, [sessionId, setCourseGatePassed]);
 
   // Track language/mode changes for achievements
   useEffect(() => { trackLanguageUsed(selectedLanguage); }, [selectedLanguage, trackLanguageUsed]);
