@@ -6,10 +6,12 @@ import {
   ShieldCheck,
   Sparkles,
   Volume2,
+  Cpu,
 } from 'lucide-react';
 import { useBlueJStore } from '@/lib/store';
 import { listDeviceVoices } from '@/lib/native-bridge';
 import { useUnlockAgent } from '@/hooks/use-bluej-api';
+import { AIProviderSettings } from './AIProviderSettings';
 
 interface Props {
   open: boolean;
@@ -106,28 +108,15 @@ export function SystemControlDrawer({ open, onClose }: Props) {
         </div>
 
         <div className="space-y-5 overflow-y-auto p-4 text-sm">
+          {/* AI Provider Settings — API key, model, endpoint */}
           <section className="hud-panel space-y-3 p-4">
-            <div className="flex items-center gap-2 text-primary">
-              <Bot className="h-4 w-4" />
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Cpu className="h-4 w-4" />
               <h3 className="font-hud text-xs uppercase tracking-widest">
-                Intelligence Routing
+                AI Provider Settings
               </h3>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(['auto', 'local', 'cloud'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setProviderMode(mode)}
-                  className={`rounded border px-3 py-2 text-xs font-hud uppercase tracking-wider ${
-                    providerMode === mode
-                      ? 'border-primary/60 bg-primary/15 text-primary'
-                      : 'border-primary/20 text-primary/60'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
+            <AIProviderSettings />
             <p className="text-xs font-mono text-primary/50">
               Local model: {localModelReady ? 'ready' : localModelStatus}
             </p>
