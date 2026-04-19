@@ -1,0 +1,45 @@
+###############################################################################
+# B.L.U.E.-J. — Windows Build (.exe)
+###############################################################################
+name: "\U0001F5A5️ Build Windows"
+
+on:
+  push:
+    branches: [build/windows]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-win-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    uses: ./.github/workflows/build-frontend.yml
+
+  build-windows:
+    name: Windows (.exe)
+    needs: frontend
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+
+      - name: Build Electron app
+        run: npx electron-builder --windows --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: release/*.exe
+          retention-days: 30

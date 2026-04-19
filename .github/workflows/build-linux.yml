@@ -1,0 +1,51 @@
+###############################################################################
+# B.L.U.E.-J. — Linux Build (.AppImage + .deb)
+###############################################################################
+name: "\U0001F427 Build Linux"
+
+on:
+  push:
+    branches: [build/linux]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    uses: ./.github/workflows/build-frontend.yml
+
+  build-linux:
+    name: Linux (.AppImage + .deb)
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+
+      # Linux electron-builder needs these for AppImage/deb
+      - name: Install Linux build deps
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
+
+      - name: Build Electron app
+        run: npx electron-builder --linux --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            release/*.AppImage
+            release/*.deb
+          retention-days: 30

@@ -1,0 +1,72 @@
+###############################################################################
+# B.L.U.E.-J. — Deploy OTA Web Bundle to GitHub Pages
+#
+# Push lightweight web-only updates to mobile (Capacitor) apps without
+# rebuilding the full APK. The app checks for updates on launch.
+#
+# Trigger: push to build/ota branch, or manual workflow_dispatch.
+###############################################################################
+name: "📡 Deploy OTA Update"
+
+on:
+  push:
+    branches: [build/ota]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label (e.g. 1.0.1-hotfix)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ota-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy OTA Bundle
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm install --no-package-lock
+      - run: npm run build
+
+      - name: Create OTA manifest
+        run: |
+          VERSION="${{ inputs.version || format('{0}-ota', github.sha) }}"
+          cd dist
+          tar czf ../bundle.tar.gz .
+          CHECKSUM=$(sha256sum ../bundle.tar.gz | cut -d' ' -f1)
+          mkdir -p ota
+          mv ../bundle.tar.gz ota/bundle.tar.gz
+          cat > ota/manifest.json << EOF
+          {
+            "version": "${VERSION}",
+            "buildDate": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "bundleUrl": "bundle.tar.gz",
+            "checksum": "${CHECKSUM}",
+            "notes": "OTA update ${VERSION}"
+          }
+          EOF
+          echo "Created OTA manifest for v${VERSION}"
+          cat ota/manifest.json
+
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deploy
+        uses: actions/deploy-pages@v4

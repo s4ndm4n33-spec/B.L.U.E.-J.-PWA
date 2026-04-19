@@ -1,0 +1,56 @@
+###############################################################################
+# B.L.U.E.-J. — Create Release (manual, collects all artifacts)
+###############################################################################
+name: "\U0001F680 Create Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.0.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      # Try to download each artifact — they may not all exist
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts/windows/
+        continue-on-error: true
+
+      - name: Download Linux builds
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-builds
+          path: artifacts/linux/
+        continue-on-error: true
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: artifacts/android/
+        continue-on-error: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: "B.L.U.E.-J. ${{ inputs.version }}"
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/windows/*
+            artifacts/linux/*
+            artifacts/android/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

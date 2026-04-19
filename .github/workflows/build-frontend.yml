@@ -1,0 +1,25 @@
+###############################################################################
+# B.L.U.E.-J. — Build Frontend (shared by all platform builds)
+###############################################################################
+name: "\U0001F4E6 Build Frontend"
+
+on:
+  workflow_call:
+    # Called by platform-specific workflows
+
+jobs:
+  build:
+    name: Build Vite Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          retention-days: 7
