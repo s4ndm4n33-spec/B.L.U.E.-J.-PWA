@@ -7,9 +7,15 @@
     "node": "22.x"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5000 --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "tsx server/index.ts",
+    "start": "concurrently \"npm run dev\" \"npm run server\"",
+    "electron:dev": "electron .",
+    "electron:build": "npm run build && electron-builder --config electron-builder.json",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android"
   },
   "dependencies": {
     "pino-http": "^6.8.0",
@@ -99,5 +105,6 @@
     "typescript": "^5.7.0",
     "vite-plugin-pwa": "^0.21.0",
     "workbox-window": "^7.0.0"
-  }
+  },
+
 }
