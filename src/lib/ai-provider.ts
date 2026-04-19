@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ProviderMode = 'auto' | 'cloud' | 'local';
+export type ProviderMode = 'auto' | 'cloud' | 'local' | 'local-server';
 
 export interface AIProviderState {
   providerMode: ProviderMode;
@@ -19,7 +19,9 @@ export interface AIProviderState {
   fastModel: string;         // Smaller model for optimize/gauntlet
   ttsVoice: string;          // Default TTS voice
   localEndpoint: string;     // Local AI server endpoint (LM Studio etc.)
+  localModel: string;        // Model name on local server (e.g. llama3, phi3)
   hasServerAccess: boolean;  // Whether Express server is reachable
+  localServerReachable: boolean; // Whether Ollama/LM Studio is reachable
 
   // Actions
   setProviderMode: (mode: ProviderMode) => void;
@@ -29,7 +31,9 @@ export interface AIProviderState {
   setFastModel: (model: string) => void;
   setTtsVoice: (voice: string) => void;
   setLocalEndpoint: (url: string) => void;
+  setLocalModel: (model: string) => void;
   setHasServerAccess: (v: boolean) => void;
+  setLocalServerReachable: (v: boolean) => void;
   syncToServer: () => Promise<void>;
   loadFromServer: () => Promise<void>;
 }
@@ -43,8 +47,10 @@ export const useAIProviderStore = create<AIProviderState>()(
       chatModel: 'gpt-4o',
       fastModel: 'gpt-4o-mini',
       ttsVoice: 'nova',
-      localEndpoint: 'http://localhost:1234/v1',
+      localEndpoint: 'http://localhost:11434/v1',
+      localModel: '',
       hasServerAccess: true,
+      localServerReachable: false,
 
       setProviderMode: (mode) => set({ providerMode: mode }),
       setApiKey: (key) => set({ apiKey: key }),
@@ -53,7 +59,9 @@ export const useAIProviderStore = create<AIProviderState>()(
       setFastModel: (model) => set({ fastModel: model }),
       setTtsVoice: (voice) => set({ ttsVoice: voice }),
       setLocalEndpoint: (url) => set({ localEndpoint: url }),
+      setLocalModel: (model) => set({ localModel: model }),
       setHasServerAccess: (v) => set({ hasServerAccess: v }),
+      setLocalServerReachable: (v) => set({ localServerReachable: v }),
 
       syncToServer: async () => {
         try {
@@ -94,6 +102,7 @@ export const useAIProviderStore = create<AIProviderState>()(
         fastModel: state.fastModel,
         ttsVoice: state.ttsVoice,
         localEndpoint: state.localEndpoint,
+        localModel: state.localModel,
       }),
     }
   )

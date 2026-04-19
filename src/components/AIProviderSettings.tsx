@@ -10,6 +10,8 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Save, Check, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { useAIProviderStore, type ProviderMode } from '@/lib/ai-provider';
+import { LocalModelPicker } from './LocalModelPicker';
+import { LocalServerPanel } from './LocalServerPanel';
 
 const POPULAR_MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o (recommended)' },
@@ -20,10 +22,11 @@ const POPULAR_MODELS = [
   { value: 'custom', label: 'Custom model...' },
 ];
 
-const PROVIDER_MODES: Array<{ value: ProviderMode; label: string; desc: string }> = [
-  { value: 'auto', label: 'Auto', desc: 'Uses local AI when available, falls back to cloud' },
-  { value: 'cloud', label: 'Cloud', desc: 'Always use cloud API (requires API key)' },
-  { value: 'local', label: 'Local', desc: 'Local AI only (WebLLM, no API key needed)' },
+const PROVIDER_MODES: Array<{ value: ProviderMode; label: string; desc: string; icon: string }> = [
+  { value: 'auto', label: 'Auto', desc: 'Tries local server → WebLLM → cloud', icon: '⚡' },
+  { value: 'local-server', label: 'Ollama / Local', desc: 'Your own GGUF models via Ollama, LM Studio, etc.', icon: '🖥️' },
+  { value: 'cloud', label: 'Cloud API', desc: 'OpenAI, Google, OpenRouter (requires API key)', icon: '☁️' },
+  { value: 'local', label: 'In-Browser', desc: 'WebLLM — needs WebGPU (desktop only)', icon: '🧠' },
 ];
 
 export function AIProviderSettings() {
@@ -79,18 +82,18 @@ export function AIProviderSettings() {
         <label className="block text-xs font-hud text-primary/70 uppercase tracking-wider mb-2">
           Provider Mode
         </label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {PROVIDER_MODES.map((mode) => (
             <button
               key={mode.value}
               onClick={() => setProviderMode(mode.value)}
-              className={`px-3 py-2 rounded-sm text-xs font-hud border transition-all ${
+              className={`px-3 py-2 rounded-sm text-xs font-hud border transition-all text-left ${
                 providerMode === mode.value
                   ? 'border-primary bg-primary/20 text-primary'
                   : 'border-primary/20 text-primary/50 hover:text-primary/80'
               }`}
             >
-              <div className="font-bold">{mode.label}</div>
+              <div className="font-bold">{mode.icon} {mode.label}</div>
               <div className="text-[10px] opacity-70 mt-0.5">{mode.desc}</div>
             </button>
           ))}
@@ -203,19 +206,18 @@ export function AIProviderSettings() {
         </div>
       )}
 
-      {/* Local AI Endpoint */}
-      {providerMode !== 'cloud' && (
+      {/* Local Server Panel (Ollama / LM Studio / llama.cpp) */}
+      {(providerMode === 'local-server' || providerMode === 'auto') && (
+        <LocalServerPanel />
+      )}
+
+      {/* In-Browser WebLLM (WebGPU) */}
+      {(providerMode === 'local' || providerMode === 'auto') && (
         <div>
-          <label className="block text-xs font-hud text-primary/70 uppercase tracking-wider mb-2">
-            Local AI Endpoint <span className="opacity-50">(LM Studio / Ollama)</span>
+          <label className="block text-xs font-hud text-primary/70 uppercase tracking-wider mb-3">
+            🧠 In-Browser AI (WebLLM)
           </label>
-          <input
-            type="text"
-            value={localEndpoint}
-            onChange={(e) => setLocalEndpoint(e.target.value)}
-            placeholder="http://localhost:1234/v1"
-            className="w-full bg-black/30 border border-primary/20 rounded-sm px-3 py-2 text-sm text-primary placeholder:text-primary/30 focus:border-primary/50 focus:outline-none font-mono"
-          />
+          <LocalModelPicker />
         </div>
       )}
 

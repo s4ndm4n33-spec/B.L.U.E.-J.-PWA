@@ -5,6 +5,7 @@ import { useTextToSpeech } from '@/hooks/use-bluej-api';
 import { chatOffline, isOfflineReady } from '@/lib/offline-ai';
 import { chatDirectOpenAI } from '@/lib/ai-provider';
 import { useAIProviderStore } from '@/lib/ai-provider';
+import { chatLocalServer } from '@/lib/local-server-ai';
 
 export type { ChatMessage };
 
@@ -13,10 +14,18 @@ function shouldUseLocalModel(): boolean {
   if (providerMode === 'local') {
     return localModelReady && isOfflineReady();
   }
-  if (providerMode === 'cloud') {
+  if (providerMode === 'cloud' || providerMode === 'local-server') {
     return false;
   }
   return (localModelReady && isOfflineReady()) || !navigator.onLine;
+}
+
+/** True when the user wants to use Ollama / LM Studio / llama.cpp. */
+function shouldUseLocalServer(): boolean {
+  const { providerMode, localServerReachable, localModel } = useAIProviderStore.getState();
+  if (providerMode === 'local-server') return true;
+  if (providerMode === 'auto' && localServerReachable && localModel) return true;
+  return false;
 }
 
 /** True when the Express API server is NOT available (Electron / Capacitor / static). */
@@ -73,11 +82,42 @@ export function useChatStream() {
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
-      provider: shouldUseLocalModel() ? 'local' : 'cloud',
+      provider: shouldUseLocalServer() ? 'local-server' : shouldUseLocalModel() ? 'local' : 'cloud',
     });
 
     try {
-      // ── Path 1: Local model (WebLLM) ──────────────────────
+      // ── Path 0: Local server (Ollama / LM Studio / llama.cpp) ──
+      if (shouldUseLocalServer()) {
+        const recentMessages = messages
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .slice(-10)
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        recentMessages.push({ role: 'user', content });
+
+        const systemMsg = {
+          role: 'system' as const,
+          content: `You are B.L.U.E.-J., an advanced AI coding simulator and learning companion. You help users learn programming in ${selectedLanguage || 'any language'}. Be precise, educational, and encouraging. Use code examples when helpful.${learnerMode ? ' The user is in learner mode — explain concepts step by step.' : ''}`,
+        };
+
+        let assistantContent = '';
+        await chatLocalServer(
+          [systemMsg, ...recentMessages],
+          (chunk) => {
+            assistantContent += chunk;
+            updateLastAssistantMessage(assistantMessageId, assistantContent);
+          },
+        );
+
+        setIsTyping(false);
+
+        if (assistantContent && autoReadReplies && speechEnabled && onAudioReceived) {
+          const textForSpeech = assistantContent.replace(/```[\s\S]*?```/g, ' [Code Block] ');
+          onAudioReceived(textForSpeech, 'device-native');
+        }
+        return;
+      }
+
+      // ── Path 1: Local model (WebLLM — in-browser) ──────────────────────
       if (providerMode === 'local' && !isOfflineReady()) {
         throw new Error('Local model requested but not available.');
       }
