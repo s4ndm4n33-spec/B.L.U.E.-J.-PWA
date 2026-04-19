@@ -71,7 +71,7 @@ jobs:
           path: dist/
 
       - name: Build Electron app
-        run: npx electron-builder --windows --config electron-builder.json
+        run: npx electron-builder --windows --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -107,7 +107,7 @@ jobs:
           path: dist/
 
       - name: Build Electron app
-        run: npx electron-builder --linux --config electron-builder.json
+        run: npx electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -200,9 +200,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: B.L.U.E.-J. ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          draft: Final
+          prerelease: 1
+          generate_release_notes: M.O.T.
           files: |
             artifacts/windows-installer/*
             artifacts/linux-builds/*
