@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Download, Check, Loader2, Trash2, Cpu, AlertTriangle, Zap } from 'lucide-react';
 import { useBlueJStore } from '@/lib/store';
-import { initOfflineAI, isOfflineReady, disposeOfflineAI, supportsWebGPU } from '@/lib/offline-ai';
+import { initOfflineAI, isOfflineReady, disposeOfflineAI, supportsWebGPU, checkWebGPUDeep } from '@/lib/offline-ai';
 
 interface ModelOption {
   id: string;
@@ -85,9 +85,16 @@ export function LocalModelPicker() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
   const [hasWebGPU, setHasWebGPU] = useState(true);
+  const [gpuReason, setGpuReason] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    // Quick check first, then deep probe
     setHasWebGPU(supportsWebGPU());
+    checkWebGPUDeep().then(({ supported, reason }) => {
+      setHasWebGPU(supported);
+      setGpuReason(reason);
+    });
   }, []);
 
   const handleLoadModel = useCallback(async (modelId: string) => {
@@ -96,8 +103,17 @@ export function LocalModelPicker() {
     setLocalModelStatus('downloading');
     setDownloadProgress(0);
     setProgressText('Initializing...');
+    setErrorMsg('');
 
     try {
+      // Deep-check WebGPU first so we get a real error instead of silent crash
+      const gpu = await checkWebGPUDeep();
+      if (!gpu.supported) {
+        setLocalModelStatus('error');
+        setErrorMsg(`WebGPU check failed: ${gpu.reason}`);
+        return;
+      }
+
       // Dispose existing model first
       if (isOfflineReady()) {
         await disposeOfflineAI();
@@ -116,14 +132,16 @@ export function LocalModelPicker() {
         setLocalModelStatus('ready');
         setLocalModelReady(true);
         setProgressText('');
+        setErrorMsg('');
       } else {
         setLocalModelStatus('error');
-        setProgressText('Failed to load model');
+        setErrorMsg('Model failed to load — your device may not have enough RAM for this model. Try a smaller one.');
       }
     } catch (err) {
       console.error('Model load error:', err);
       setLocalModelStatus('error');
-      setProgressText(err instanceof Error ? err.message : 'Unknown error');
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(`Load error: ${msg}`);
     }
   }, [setLocalModelStatus, setLocalModelReady]);
 
@@ -142,9 +160,14 @@ export function LocalModelPicker() {
           <span className="font-hud uppercase tracking-wider">WebGPU Not Available</span>
         </div>
         <p className="text-xs text-primary/50 mt-2">
-          This device doesn't support WebGPU, which is needed for on-device AI. 
+          This device doesn't support WebGPU, which is needed for on-device AI.
           Try Chrome 113+ or a newer phone. You can still use Cloud mode with an API key.
         </p>
+        {gpuReason && (
+          <p className="text-[10px] text-primary/30 mt-1 font-mono break-all">
+            Diagnostic: {gpuReason}
+          </p>
+        )}
       </div>
     );
   }
@@ -156,6 +179,7 @@ export function LocalModelPicker() {
         const isSelected = selectedModel === model.id;
         const isLoaded = isSelected && localModelReady;
         const isLoading = isSelected && localModelStatus === 'downloading';
+        const isError = isSelected && localModelStatus === 'error';
 
         return (
           <div
@@ -163,6 +187,8 @@ export function LocalModelPicker() {
             className={`rounded border p-3 transition-all cursor-pointer ${
               isLoaded
                 ? 'border-green-400/50 bg-green-400/5'
+                : isError
+                ? 'border-red-400/40 bg-red-400/5'
                 : isSelected
                 ? 'border-primary/40 bg-primary/5'
                 : 'border-primary/10 hover:border-primary/25'
@@ -208,6 +234,21 @@ export function LocalModelPicker() {
                         className="h-full bg-cyan-400/60 transition-all duration-300"
                         style={{ width: `${downloadProgress}%` }}
                       />
+                    </div>
+                  </div>
+                ) : isError ? (
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1 text-[11px] text-red-400">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                      <span className="break-words">{errorMsg || 'Unknown error'}</span>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleLoadModel(model.id); }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded border border-cyan-400/30 text-cyan-400/70 text-[11px] font-hud uppercase tracking-wider hover:border-cyan-400/50 hover:text-cyan-400"
+                      >
+                        <Download className="w-3 h-3" /> Retry
+                      </button>
                     </div>
                   </div>
                 ) : (

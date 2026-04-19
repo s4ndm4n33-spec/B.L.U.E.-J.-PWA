@@ -69,6 +69,31 @@ export function supportsWebGPU(): boolean {
   return Boolean(navigator.gpu);
 }
 
+/**
+ * Deep WebGPU check — actually requests an adapter + device.
+ * Returns { supported, reason } so the UI can show exactly why it failed.
+ */
+export async function checkWebGPUDeep(): Promise<{ supported: boolean; reason: string }> {
+  if (!navigator.gpu) {
+    return { supported: false, reason: 'navigator.gpu not found — browser/WebView too old or WebGPU disabled' };
+  }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      return { supported: false, reason: 'WebGPU adapter unavailable — GPU may not be supported' };
+    }
+    const device = await adapter.requestDevice();
+    const adapterInfo = adapter.info ?? {} as any;
+    device.destroy();
+    return {
+      supported: true,
+      reason: `WebGPU OK — ${adapterInfo.vendor || 'unknown'} / ${adapterInfo.architecture || 'unknown'}`,
+    };
+  } catch (err) {
+    return { supported: false, reason: `WebGPU probe failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 async function createStreamingResponse(
   messages: webllm.ChatCompletionMessageParam[],
   maxTokens: number,
