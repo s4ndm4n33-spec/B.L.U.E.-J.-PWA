@@ -12,6 +12,7 @@ import { useBlueJStore } from '@/lib/store';
 import { listDeviceVoices } from '@/lib/native-bridge';
 import { useUnlockAgent } from '@/hooks/use-bluej-api';
 import { AIProviderSettings } from './AIProviderSettings';
+import { LocalModelPicker } from './LocalModelPicker';
 
 interface Props {
   open: boolean;
@@ -117,9 +118,20 @@ export function SystemControlDrawer({ open, onClose }: Props) {
               </h3>
             </div>
             <AIProviderSettings />
-            <p className="text-xs font-mono text-primary/50">
-              Local model: {localModelReady ? 'ready' : localModelStatus}
+          </section>
+
+          {/* On-Device AI Model Picker */}
+          <section className="hud-panel space-y-3 p-4">
+            <div className="flex items-center gap-2 text-green-400">
+              <Bot className="h-4 w-4" />
+              <h3 className="font-hud text-xs uppercase tracking-widest">
+                On-Device AI Models
+              </h3>
+            </div>
+            <p className="text-[11px] text-primary/50">
+              Download a model to run AI completely on your device — no internet, no API key, no cost.
             </p>
+            <LocalModelPicker />
           </section>
 
           <section className="hud-panel space-y-3 p-4">
@@ -255,7 +267,7 @@ export function SystemControlDrawer({ open, onClose }: Props) {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="BruceWayne"
+                  placeholder="Enter override code"
                   className="flex-1 rounded border border-primary/20 bg-black/30 px-3 py-2 font-mono text-xs text-primary"
                 />
                 <button
