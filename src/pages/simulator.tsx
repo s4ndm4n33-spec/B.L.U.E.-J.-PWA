@@ -18,6 +18,7 @@ import { DailyGoals } from '@/components/DailyGoals';
 import { AchievementsPanel } from '@/components/AchievementsPanel';
 import { WellnessPanel } from '@/components/WellnessPanel';
 import { HardwareStrip } from '@/components/HardwareStrip';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { DiagnosticSequence } from '@/components/DiagnosticSequence';
 import { UnlockToast } from '@/components/UnlockToast';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
@@ -41,6 +42,7 @@ export default function SimulatorPage() {
 
   return (
     <div className="min-h-screen h-screen flex flex-col relative bg-background">
+      <UpdateBanner />
       <div className="scanlines pointer-events-none" />
       <div className="absolute inset-0 pointer-events-none z-0">
         <img

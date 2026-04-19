@@ -38,6 +38,13 @@
     "category": "public.app-category.developer-tools",
     "artifactName": "BLUE-J-${version}-macOS.${ext}"
   },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "s4ndm4n33-spec",
+      "repo": "B.L.U.E.-J.-PWA"
+    }
+  ],
   "linux": {
     "target": ["AppImage", "deb"],
     "icon": "public/icons/icon-512.png",
