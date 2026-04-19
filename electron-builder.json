@@ -8,7 +8,7 @@
   "files": [
     "dist/**/*",
     "server/**/*",
-    "electron-main.js",
+    "electron-main.cjs",
     "package.json"
   ],
   "extraResources": [
