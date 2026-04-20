@@ -14,9 +14,18 @@
  *   - macOS: .dmg
  *   - Linux: .AppImage + .deb
  */
-const { app, BrowserWindow, Menu, Tray, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+
+// Auto-updater — checks GitHub Releases for new versions
+let autoUpdater;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.autoDownload = false; // Ask user first
+} catch (_) {
+  // electron-updater not installed in dev — ignore
+}
 
 let mainWindow;
 let apiServer;
@@ -106,10 +115,41 @@ function createTray() {
   tray.setContextMenu(contextMenu);
 }
 
+function setupAutoUpdater() {
+  if (!autoUpdater) return;
+  
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `B.L.U.E.-J. v${info.version} is available. Download now?`,
+      buttons: ['Download', 'Later'],
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.downloadUpdate();
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Ready',
+      message: 'Update downloaded. Restart to apply?',
+      buttons: ['Restart', 'Later'],
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  // Check 10s after launch, then every 4 hours
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(async () => {
   await startApiServer();
   createWindow();
   createTray();
+  setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {

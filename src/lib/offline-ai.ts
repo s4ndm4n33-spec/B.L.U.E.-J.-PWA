@@ -6,6 +6,21 @@ import * as webllm from '@mlc-ai/web-llm';
 
 const DEFAULT_MODEL = 'Phi-3.5-mini-instruct-q4f16_1-MLC';
 
+/** Read user's model preference (set by LocalModelPicker). */
+function getPreferredModel(): string {
+  try {
+    return localStorage.getItem('bluej-local-model') || DEFAULT_MODEL;
+  } catch {
+    return DEFAULT_MODEL;
+  }
+}
+
+/** Currently loaded model ID (for display/comparison). */
+let loadedModelId: string | null = null;
+export function getLoadedModelId(): string | null {
+  return loadedModelId;
+}
+
 let engine: webllm.MLCEngine | null = null;
 let isReady = false;
 
@@ -17,15 +32,16 @@ export type ChatTurn = {
 
 export async function initOfflineAI(
   onProgress?: (progress: DownloadProgress) => void,
-  modelId: string = DEFAULT_MODEL,
+  modelId?: string,
 ): Promise<boolean> {
+  const targetModel = modelId || getPreferredModel();
   try {
     if (!navigator.gpu) {
       console.warn('WebGPU not supported — offline AI unavailable');
       return false;
     }
     engine = new webllm.MLCEngine();
-    await engine.reload(modelId, {
+    await engine.reload(targetModel, {
       initProgressCallback: (report) => {
         onProgress?.({
           progress: Math.round(report.progress * 100),
@@ -34,11 +50,13 @@ export async function initOfflineAI(
       },
     });
     isReady = true;
+    loadedModelId = targetModel;
     return true;
   } catch (error) {
     console.error('Failed to initialise offline AI:', error);
     engine = null;
     isReady = false;
+    loadedModelId = null;
     return false;
   }
 }
@@ -49,6 +67,31 @@ export function isOfflineReady(): boolean {
 
 export function supportsWebGPU(): boolean {
   return Boolean(navigator.gpu);
+}
+
+/**
+ * Deep WebGPU check — actually requests an adapter + device.
+ * Returns { supported, reason } so the UI can show exactly why it failed.
+ */
+export async function checkWebGPUDeep(): Promise<{ supported: boolean; reason: string }> {
+  if (!navigator.gpu) {
+    return { supported: false, reason: 'navigator.gpu not found — browser/WebView too old or WebGPU disabled' };
+  }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      return { supported: false, reason: 'WebGPU adapter unavailable — GPU may not be supported' };
+    }
+    const device = await adapter.requestDevice();
+    const adapterInfo = adapter.info ?? {} as any;
+    device.destroy();
+    return {
+      supported: true,
+      reason: `WebGPU OK — ${adapterInfo.vendor || 'unknown'} / ${adapterInfo.architecture || 'unknown'}`,
+    };
+  } catch (err) {
+    return { supported: false, reason: `WebGPU probe failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 async function createStreamingResponse(

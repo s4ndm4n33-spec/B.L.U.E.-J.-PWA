@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Heart,
   Award,
   Bot,
   Code2,
@@ -124,6 +125,16 @@ export function HudHeader() {
                   }`}
                 >
                   <Award className="h-4 w-4" />
+                </button>
+              </Tooltip>
+              <Tooltip content="Wellness & Health" position="bottom">
+                <button
+                  onClick={() => setActiveTab('wellness')}
+                  className={`rounded-sm px-2.5 py-1 text-xs font-hud transition-colors ${
+                    activeTab === 'wellness' ? 'bg-primary/20 text-primary' : 'text-primary/50'
+                  }`}
+                >
+                  <Heart className="h-4 w-4" />
                 </button>
               </Tooltip>
             </div>

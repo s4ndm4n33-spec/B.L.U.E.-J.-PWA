@@ -1,15 +1,35 @@
 import { Router, type IRouter } from "express";
-import { textToSpeech } from "@workspace/integrations-openai-ai-server/audio";
-import { TextToSpeechBody } from "@workspace/api-zod";
+import { getOpenAI, hasApiKey } from "../../lib/ai-client.js";
+import { getSettings } from "../../lib/settings.js";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
+const TextToSpeechBody = z.object({
+  text: z.string().min(1),
+  voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).default("nova"),
+});
+
 router.post("/", async (req, res) => {
   try {
-    const { text, voice = "echo" } = TextToSpeechBody.parse(req.body);
+    if (!hasApiKey()) {
+      res.status(400).json({ error: "No API key configured." });
+      return;
+    }
 
-    const audioBuffer = await textToSpeech(text, voice as "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer", "mp3");
-    const base64 = audioBuffer.toString("base64");
+    const { text, voice } = TextToSpeechBody.parse(req.body);
+    const settings = getSettings();
+    const openai = getOpenAI();
+
+    const response = await openai.audio.speech.create({
+      model: settings.ttsModel,
+      voice: voice,
+      input: text,
+      response_format: "mp3",
+    });
+
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
 
     res.json({ audio: base64, format: "mp3" });
   } catch (err) {

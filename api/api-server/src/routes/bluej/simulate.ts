@@ -1,15 +1,7 @@
 import { Router, type IRouter } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { getOpenAI, getFastModel, hasApiKey } from "../../lib/ai-client.js";
 
 const router: IRouter = Router();
-
-interface HardwareProfile {
-  id: string;
-  cores: number | null;
-  ramGb: number | null;
-  gpu: string | null;
-  desc: string;
-}
 
 const PROFILE_MAP: Record<string, { cores: number; ramGb: number; gpu: string | null; label: string }> = {
   'auto':          { cores: 4,  ramGb: 8,  gpu: null,                label: 'Auto-detected machine' },
@@ -43,32 +35,22 @@ CRITICAL RULES:
 4. Show realistic import times, especially for libraries like numpy, torch, transformers (heavy on Pi/laptop).
 5. If code uses CUDA/GPU and ${profile.gpu ? `GPU is available (${profile.gpu})` : 'there is NO GPU'}: ${profile.gpu ? 'show GPU operations working' : 'show RuntimeError: CUDA not available'}.
 6. If code would run >30s on this hardware: show a spinner or progress indication, then truncate with [...continues...].
-7. After the raw output, add a new line starting with "---" then ONE sentence from J. in dry British wit about the result on this specific hardware.
-
-EXAMPLES OF REALISTIC OUTPUT:
-- Raspberry Pi running torch: include slow import time (8–12s), possible OOM if model >3B params
-- High-end workstation: fast, clean, no warnings
-- Budget laptop running training loop: include RAM usage warnings if model is large`;
+7. After the raw output, add a new line starting with "---" then ONE sentence from J. in dry British wit about the result on this specific hardware.`;
 }
 
 router.post("/", async (req, res) => {
   try {
+    if (!hasApiKey()) {
+      res.status(400).json({ error: "No API key configured." });
+      return;
+    }
+
     const {
-      code,
-      language,
-      os = 'linux',
-      simProfileId = 'auto',
-      simCores,
-      simRamGb,
-      simGpu,
+      code, language, os = 'linux', simProfileId = 'auto',
+      simCores, simRamGb, simGpu,
     } = req.body as {
-      code: string;
-      language: string;
-      os?: string;
-      simProfileId?: string;
-      simCores?: number | null;
-      simRamGb?: number | null;
-      simGpu?: string | null;
+      code: string; language: string; os?: string; simProfileId?: string;
+      simCores?: number | null; simRamGb?: number | null; simGpu?: string | null;
     };
 
     if (!code?.trim()) {
@@ -76,7 +58,6 @@ router.post("/", async (req, res) => {
       return;
     }
 
-    // Resolve profile
     const baseProfile = PROFILE_MAP[simProfileId] ?? PROFILE_MAP['auto'];
     const profile = {
       ...baseProfile,
@@ -85,11 +66,12 @@ router.post("/", async (req, res) => {
       gpu: simGpu !== undefined ? simGpu : baseProfile.gpu,
     };
 
+    const openai = getOpenAI();
     const systemPrompt = buildSimulationSystem(profile, os);
     const userPrompt = `Simulate running this ${language} code:\n\`\`\`${language}\n${code}\n\`\`\``;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: getFastModel(),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -101,15 +83,11 @@ router.post("/", async (req, res) => {
     const output = response.choices[0]?.message?.content ?? "(simulation failed)";
 
     res.json({
-      output,
-      language,
+      output, language,
       simulatedAt: new Date().toISOString(),
       profile: {
-        id: simProfileId,
-        label: profile.label,
-        cores: profile.cores,
-        ramGb: profile.ramGb,
-        gpu: profile.gpu,
+        id: simProfileId, label: profile.label,
+        cores: profile.cores, ramGb: profile.ramGb, gpu: profile.gpu,
       },
     });
   } catch (err) {
