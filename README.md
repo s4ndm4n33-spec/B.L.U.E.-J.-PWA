@@ -1,41 +1,20 @@
-# B.L.U.E.-J. Mobile PWA Expansion
-
-A sovereign, mobile-first evolution of the B.L.U.E.-J. development engine. This expansion transforms the core simulator into a Progressive Web App (PWA) with integrated offline AI and a gamified learning framework.
-
-## 🚀 Key Features
-
-### 📱 PWA & Mobile UX
-- **Installable**: Full PWA support for Android and iOS via "Add to Home Screen".
-- **Offline First**: Workbox-powered caching for all assets, including Google Fonts.
-- **Touch-Optimized**: 4-tab mobile navigation (Chat, IDE, Goals, Achievements) with haptic-style Framer Motion animations.
-
-### 🤖 Localized Intelligence
-- **Offline AI**: Integration of `@mlc-ai/web-llm` running Phi-3.5-mini entirely in-browser via WebGPU.
-- **Adaptive Persona**: AI personality scales based on learner mode (Kids/Teen/Adult/Advanced).
-- **Smart Fallback**: Automatic transition to local inference when server connectivity is lost.
-
-### 🎯 Gamification Engine
-- **Daily Goals**: 5 randomized missions per day across coding, debugging, and exploration.
-- **XP & Leveling**: Level-based progression system ($Level \times 100\ XP$).
-- **Achievements**: 14 unlockable badges across 4 rarity tiers (Common to Legendary).
-- **Milestones**: 18 tracked metrics including "Thousand Lines Club" and session streaks.
-
-## 🛠️ Technical Architecture
-
-### Modified Files
-- `package.json`: Added PWA and WebLLM dependencies.
-- `vite.config.ts`: Configured VitePWA plugin and manifest.
-- `src/lib/store.ts`: Extended state for mobile tabs and gamification events.
-- `src/hooks/use-chat.ts`: Integrated progress tracking and offline fallback.
-
-### New Modules
-- `src/lib/progress-store.ts`: Core gamification and XP logic.
-- `src/lib/offline-ai.ts`: WebLLM/WebGPU implementation.
-- `src/components/UnlockToast.tsx`: Animated achievement notifications.
-
-## 📦 Quick Start (Replit)
-
-1. Extract `bluej-mobile-pwa.zip` into your project directory.
-2. Install dependencies:
-   ```bash
-   npm install
+B.L.U.E .- J. Landing Page Copy
+Headline
+B.L.U.E .- J. is an Al-powered development environment that teaches you to build real software systems
+through guided, interactive execution.
+Product Description
+It combines an Al tutor, a live coding environment, and a structured learning system into a single
+platform. Users don't just learn programming concepts-they build working systems step by step with
+Al assistance.
+How It Works
+Users interact with an Al assistant that guides them through a structured curriculum. Code is
+generated, executed, and refined inside a unified interface that supports simulation, optimization, and
+real-time feedback.
+Key Value
+The platform removes the gap between learning and building by embedding execution directly into the
+learning process. This allows users to progress from basic programming to building functional Al
+systems within one environment.
+Closing
+B.L.U.E .- J. is designed for learners and builders who want to move beyond tutorials and into real
+system creation. It is a complete environment for learning, building, and deploying software with Al
+assistance.
