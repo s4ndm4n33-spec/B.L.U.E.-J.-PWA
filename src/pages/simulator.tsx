@@ -24,6 +24,7 @@ import { UnlockToast } from '@/components/UnlockToast';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { BreakReminder } from '@/components/BreakReminder';
 import { AnimatePresence } from 'framer-motion';
+import { MemoryPanel } from '@/components/MemoryPanel';
 
 export default function SimulatorPage() {
   const { detectSystem, activeTab, diagnosticDone, setDiagnosticDone, selectedLanguage, learnerMode } = useBlueJStore();
@@ -74,6 +75,9 @@ export default function SimulatorPage() {
         </div>
         <div className={`w-full h-full ${activeTab === 'wellness' ? 'block' : 'hidden'} md:hidden`}>
           <WellnessPanel />
+        </div>
+        <div className={`w-full h-full ${activeTab === 'memory' ? 'block' : 'hidden'} md:hidden`}>
+          <MemoryPanel />
         </div>
       </main>
 

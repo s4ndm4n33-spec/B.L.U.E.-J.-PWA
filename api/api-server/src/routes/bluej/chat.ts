@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { getOpenAI, getChatModel, getFastModel, hasApiKey } from "../../lib/ai-client.js";
+import { askTutor, askAgent, hasPioneerKey } from "../../lib/bluej.service.js";
+import type { JContext } from "../../lib/bluej.service.js";
 import db from "../../lib/mem-store.js";
 import { buildSystemPrompt, buildSafetyCheck } from "./j-personality.js";
 import { CURRICULUM } from "./curriculum.js";
@@ -19,6 +21,7 @@ const ChatWithJBody = z.object({
   learnerMode: z.string().optional(),
   providerMode: z.string().optional(),
   model: z.string().optional(), // User can override model per-request
+  agentPassword: z.string().optional(), // Pioneer agent mode password
 });
 
 const VALID_LEARNER_MODES = new Set(["kids", "teen", "adult-beginner", "advanced"]);
@@ -177,11 +180,12 @@ async function generateWithGauntlet(
 
 router.post("/", async (req, res) => {
   try {
-    if (!hasApiKey()) {
+    // Need either Pioneer or OpenAI configured
+    if (!hasPioneerKey() && !hasApiKey()) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      res.write(`data: ${JSON.stringify({ content: "⚠️ No API key configured. Go to Settings → AI Provider and enter your OpenAI API key (or any OpenAI-compatible endpoint). For offline use, switch to Local AI mode." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ content: "⚠️ No API key configured. Set PIONEER_API_KEY in .env for Pioneer AI, or go to Settings → AI Provider and enter your OpenAI API key. For offline use, switch to Local AI mode." })}\n\n`);
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       return res.end();
     }
@@ -220,30 +224,57 @@ router.post("/", async (req, res) => {
     const currentPhase = CURRICULUM[phaseIndex] ?? null;
     const currentTask = currentPhase?.tasks[taskIndex] ?? null;
 
-    const systemPrompt = buildSystemPrompt({
-      phaseIndex,
-      taskIndex,
-      currentPhase,
-      currentTask,
-      language,
-      os,
-      hardwareInfo: hardwareInfo as { cpuCores?: number | null; ramGb?: number | null; platform?: string | null } | null | undefined,
-      messageHistory,
-      learnerMode,
-    });
-
     db.addMessage(conversationId, "user", message);
 
-    const chatMessages = [
-      { role: "system" as const, content: systemPrompt },
-      ...messageHistory.slice(-20).map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-      { role: "user" as const, content: message },
-    ];
+    // ── Generate response: Pioneer (preferred) → OpenAI (fallback) ──
+    let fullResponse: string;
 
-    const fullResponse = await generateWithGauntlet(chatMessages, language, model ?? undefined);
+    if (hasPioneerKey()) {
+      // Build J context for Pioneer service
+      const jCtx: JContext = {
+        phaseIndex,
+        taskIndex,
+        currentPhase,
+        currentTask,
+        language,
+        os,
+        hardwareInfo: hardwareInfo as { cpuCores?: number | null; ramGb?: number | null; platform?: string | null } | null | undefined,
+        messageHistory: messageHistory.slice(-20),
+        learnerMode,
+      };
+
+      if (body.agentPassword) {
+        // Agent mode — password gated, full tool access
+        fullResponse = await askAgent(jCtx, message, body.agentPassword);
+      } else {
+        // Tutor mode — always available, no tools
+        fullResponse = await askTutor(jCtx, message);
+      }
+    } else {
+      // Fallback to existing OpenAI flow with Code Gauntlet
+      const systemPrompt = buildSystemPrompt({
+        phaseIndex,
+        taskIndex,
+        currentPhase,
+        currentTask,
+        language,
+        os,
+        hardwareInfo: hardwareInfo as { cpuCores?: number | null; ramGb?: number | null; platform?: string | null } | null | undefined,
+        messageHistory,
+        learnerMode,
+      });
+
+      const chatMessages = [
+        { role: "system" as const, content: systemPrompt },
+        ...messageHistory.slice(-20).map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+        { role: "user" as const, content: message },
+      ];
+
+      fullResponse = await generateWithGauntlet(chatMessages, language, model ?? undefined);
+    }
 
     db.addMessage(conversationId, "assistant", fullResponse);
     db.upsertProgress(sessionId, { conversationId, selectedLanguage: language, selectedOs: os });
